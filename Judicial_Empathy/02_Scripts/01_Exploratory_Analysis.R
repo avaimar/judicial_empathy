@@ -18,7 +18,7 @@ data_judges <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_b
 
 # Drop outcomes so as to not contaminate analysis
 data_judges<- data_judges[, progressive.vote := NULL]
-#data_cases <- data_cases[, ] TODO: Identify outcome variable
+data_cases <- data_cases[, vote:= NULL]
 
 # CODEBOOK: Data Judges
 # * yearb: Year of birth
@@ -26,6 +26,35 @@ data_judges<- data_judges[, progressive.vote := NULL]
 # Hispanic, Native American)
 # * religion: relligion
 
+# CODEBOOK: Data Cases
+# year: date on which the decision was announced
+# circuit: circuit of the court that decided the case
+# state: state in which the case was first heard
+# yeard year of death
+# pssc: state high court judge
+# plocct: local/municipal court judge
+# psjdget: years of service as a state/local judge
+# pausa: assistant US attorney
+# graddeg1: first graduate degree
+# graddeg2: second graduate degree
+# jdpp: whether law degree from public or private
+# ls: law degree institution
+# bast: whether BA received in same state as appointment
+# ba: B.A. degree institution
+# pusa: US Attorney
+# psgo: solicitor general's office
+# psg: the Solicitor General
+# pago: Justice department
+# ... many more from the Multi-User Database.. codebook
+
+# Shared variables
+# name: judge name
+# child
+# girls, sons
+# woman
+# yearb was recoded as birth
+# republican
+# songerID
 
 # 2. Explore data ----------------------------------
 # * 2.1 Judge data ------------------------------------
@@ -135,3 +164,28 @@ data_judges[, .(subpopulation_size = .N,
 # Identify missing values
 colSums(is.na(data_cases))
 colMeans(is.na(data_cases))
+
+# Number of judges
+length(unique(data_cases[, name]))
+
+# Case area
+data_cases[, .(number = .N,
+               percentage_total = .N * 100/ dim(data_cases)[1]), 
+           by = factor(area)]
+
+# Case judge
+data_cases[, .(number = .N,
+               percentage_total = .N * 100/ dim(data_cases)[1]), 
+           by = factor(name)]
+
+# Case plaintiff?
+# New Seat?
+data_cases[, .(number = .N,
+               percentage_total = .N * 100/ dim(data_cases)[1]), 
+           by = factor(pname)]
+
+# Find duplicate columns
+cols_cases <- as.data.table(colnames(data_cases))
+duplicate_cols <- cols_cases[, .N, by = V1]
+duplicate_cols <- duplicate_cols[N > 1]
+
