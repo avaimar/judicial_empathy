@@ -1,8 +1,10 @@
 # INFO -------------------------------------------
 # Script: 01_Exploratory_Analysis.R
 # Inputs:
+#   * Case data: Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_case_1.csv
+#   * Judge data: Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_judge.csv
 # Outputs:
-#
+#   * Exploratory plots at 03_Outputs/01_EDA/
 
 # 0. Working set up ------------------------------
 # Libraries
