@@ -84,7 +84,7 @@ p6
 ## different sources and at different times so the age relative to different years
 levels(as.factor(judges_small$age + judges_small$yearb))
 
-# drop 
+# drop "yearb" column
 judges_small = judges_small[,-9]
 
 ## add indicator variables for missing values
@@ -94,12 +94,5 @@ judges_small$racemiss = as.numeric(is.na(judges_small$race))
 
 ## convert missing values to 0s
 judges_small[is.na(judges_small)] <- 0
-
-## converting nominal data to factors
-judges_small$circuit.1 = as.factor(judges_small$circuit.1)
-judges_small$woman = as.factor(judges_small$woman)
-judges_small$race = as.factor(judges_small$race)
-judges_small$religion = as.factor(judges_small$religion)
-judges_small$songerID = as.factor(judges_small$songerID)
 
 write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv')
