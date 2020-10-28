@@ -1,30 +1,36 @@
 library(data.table)
 library(ggplot2)
 library(dplyr)
+library(varhandle)
 
-data_cases <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_case_1.csv")
-data_judges <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_judge.csv")
-
+data_cases <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_case_1.csv", check.names = TRUE)
+data_judges <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_judge.csv", check.names = TRUE)
 
 ## subset cases to match method from paper
 cases_small = subset(data_cases, area == "employment" | area == "Title IX" | area == "pregnancy" | area == "abortion" | area == "reproductive rights")
 cases_small = subset(cases_small, femplaintiff == 1)
 cases_small$area <- factor(cases_small$area, levels = c("abortion","employment","pregnancy","reproductive rights","Title IX"))
 
-## taken from authors R code
-## get number of cases heard by each judge
-no_cases <- matrix(data = NA, nrow = nrow(data_judges), ncol = 1)
-for(i in 1:length(no_cases)){
-  no_cases[i] <- nrow(cases_small[which(women.cases$name == judge.means$name[i]),])
-}
-data_judges$no_cases = no_cases
+## get number of cases for each judge
+cases_per_judge <- cases_small[,.(no_cases = .N), by=name]
+data_judges <- merge(data_judges, cases_per_judge, by='name')
+
 ### total number of relevant cases heard by all judges in dataset
 sum(data_judges$no_cases)
+
+## get liberal vote share (outcome)
+liberal_votes = cases_small %>% 
+  group_by(name) %>% 
+  summarise(lib_vote_share = sum(vote == 2 | vote == 3)/n())
+## this is the same as 'progressive.vote' in the dataset
 
 ### subset the data to include only those judges for whom we
 ### fertility data
 judges_small = subset(data_judges, !is.na(girls))
 nrow(judges_small)
+
+## write initial dataset to file for replication purposes
+write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_replication.csv')
 
 ## number of cases heard by judges who we have fertility data about
 cases_fertility = subset(cases_small, name %in% judges_small$name)
@@ -37,8 +43,6 @@ colSums(is.na(data_judges[, .(sons)]))
 mean_na = colMeans(is.na(judges_small))
 mean_na[mean_na != 0]
 ## highest proportion of NAs is age (.24), followed by religion, then birth year and race
-## NOTE: I think we could just get rid of the age variable since it has more NAs than birth
-## year conveys the same information. 
 
 summary(judges_small)
 ## ranges of attributes look reasonable, doesn't look like there are any
@@ -85,7 +89,7 @@ p6
 levels(as.factor(judges_small$age + judges_small$yearb))
 
 # drop "yearb" column
-judges_small = judges_small[,-9]
+judges_small = judges_small[, c("yearb"):=NULL]
 
 ## add indicator variables for missing values
 judges_small$agemiss = as.numeric(is.na(judges_small$age))
@@ -94,5 +98,21 @@ judges_small$racemiss = as.numeric(is.na(judges_small$race))
 
 ## convert missing values to 0s
 judges_small[is.na(judges_small)] <- 0
+
+## convert categorical attributes to binary indicators
+race_indicator <- to.dummy(judges_small$race, "race")
+judges_small = cbind(judges_small, race_indicator)
+
+judges_small[judges_small$religion %in% c(9, 11, 16, 17, 21, 24)]$religion <- 9
+relig_indicator <- to.dummy(judges_small$religion, "religion")
+judges_small = cbind(judges_small, relig_indicator)
+
+circuit_indicator <- to.dummy(judges_small$circuit.1, "circuit")
+judges_small = cbind(judges_small, circuit_indicator)
+
+## drop non-dummy columns
+judges_small = judges_small[, c("race"):=NULL]
+judges_small = judges_small[, c("religion"):=NULL]
+judges_small = judges_small[, c("circuit.1"):=NULL]
 
 write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv')
