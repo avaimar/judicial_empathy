@@ -107,12 +107,27 @@ judges_small[judges_small$religion %in% c(9, 11, 16, 17, 21, 24)]$religion <- 9
 relig_indicator <- to.dummy(judges_small$religion, "religion")
 judges_small = cbind(judges_small, relig_indicator)
 
-circuit_indicator <- to.dummy(judges_small$circuit.1, "circuit")
+# For circuit, correct name first so as to not create duplicate column
+setnames(judges_small, 'circuit.1', 'circuit')
+circuit_indicator <- to.dummy(judges_small$circuit, "circuit")
 judges_small = cbind(judges_small, circuit_indicator)
 
 ## drop non-dummy columns
-judges_small = judges_small[, c("race"):=NULL]
-judges_small = judges_small[, c("religion"):=NULL]
-judges_small = judges_small[, c("circuit.1"):=NULL]
+#judges_small = judges_small[, c("race"):=NULL]
+#judges_small = judges_small[, c("religion"):=NULL]
+#judges_small = judges_small[, c("circuit.1"):=NULL]
+judges_small <- judges_small[, V1 := NULL]
 
-write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv')
+# Define treatment
+# 1. Remove judges with no children
+judges_small <- judges_small[child > 0]
+
+# 2. Treatment: Judge has at least 1 girl
+judges_small <- judges_small[, z := as.numeric(girls > 0)]
+
+# 3. Move treatment to front
+setcolorder(judges_small, c('name', 'z'))
+
+# Write cleaned dataset
+write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv',
+          row.names = FALSE)

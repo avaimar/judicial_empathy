@@ -17,31 +17,89 @@ library(ggplot2) # Plots
 # Output directory
 output <- 'Judicial_empathy/03_Output/03_Matching/'
 
+# Helper functions
+source('Judicial_empathy/02_Scripts/00_utility.R')
+
 # 1. Load data ------------------------------------
-data_judges <- fread('Judicial_Empathy/01_Data/02_Cleaned_data/judges_cleaned.csv')
+data_judges <- 
+  fread('Judicial_Empathy/01_Data/02_Cleaned_data/judges_cleaned.csv')
 
 # Drop outcome variable
 data_judges <- data_judges[, progressive.vote := NULL]
 
-# 2. Calculate propensity score ------------------------------
-ps_model <- glm(formula = treatment ~ circuit.1 + child + woman + age + race + religion + 
+# Create vector of covariates (excluding dummies)
+covars <- c('child', 'woman', 'age', 'republican', 'no_cases',
+            'agemiss', 'religmiss', 'racemiss', 'circuit', 'race', 'religion')
+
+# Create vector of covariates (including dummies)
+covars_and_dummies <- c('child', 'woman', 'age', 'republican', 'no_cases',
+                        'agemiss', 'religmiss', 'racemiss',
+                        grep('circuit', colnames(data_judges), value = TRUE),
+                        grep('race', colnames(data_judges), value = TRUE),
+                        grep('religion', colnames(data_judges),value = TRUE))
+
+# 2. Get number of treatment and control units ----------
+N_table <- data_judges[, .(Ni = .N), by = z]
+
+# 3. Calculate propensity score ------------------------------
+ps_model <- glm(formula = z ~ circuit + child + woman + age + race + religion + 
                   republican + no_cases + agemiss + religmiss + racemiss,
                 family = binomial, data = data_judges)
 data_judges <- data_judges[, pscore := ps_model$fitted.values]
+sum(data_judges$pscore > 0.999)
 
-# Match 1. Robust Mahalanobis distance for all covariates -------
-m1.DM <- smahal(z = treatment,
-             X = data_judges[, .(circuit.1, child, woman, age, race, religion,
-                                 republican, no_cases, agemiss, religmiss, racemiss)])
 
-m1.match <- pairmatch(x = m1.DM, data=data_judges)
-m1.summary <- summarize.match(as.data.frame(data), m1.match, ps.name = 'pscore')
+ps_model <- glm(formula = z ~ circuit + woman + age + race + religion + 
+                  republican + no_cases + agemiss + religmiss + racemiss,
+                family = binomial, data = data_judges)
+data_judges <- data_judges[, pscore := ps_model$fitted.values]
+sum(data_judges$pscore > 0.999)
 
-# Plot
-plot(xBalance(
-  treatment ~ circuit.1 + child + woman + age + race + religion + 
-    republican + no_cases + agemiss + religmiss + racemiss + pscore + strata(m1.match) - 1, 
-  data=data_judges))
+# 4. Matching --------------------------------------------------
 
-# Match 2. RMahalanobis adding caliper -------------------------
+# Match 1. Robust Mahalanobis distance (all covariates) 1:1
+perform_matching(
+  match_id = 'm1_RM_covars.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1
+)
 
+# Match 2. RMahalanobis (all covariates) adding caliper 1:1
+perform_matching(
+  match_id = 'm2_RM_covars_c.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0.1 * sd(data_judges$pscore),
+  match_ratio = 1
+)
+
+# Match 3. Robust Mahalanobis distance (using dummies) 1:1
+perform_matching(
+  match_id = 'm3_RM_cdummies.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0,
+  match_ratio = 1
+)
+
+# Match 4. RMahalanobis (using dummies) adding caliper 1:1
+perform_matching(
+  match_id = 'm4_RM_cdummies_c.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0.1 * sd(data_judges$pscore),
+  match_ratio = 1
+)
+
+# Match 5. Robust Mahalanobis distance (all covariates) 1:2
+perform_matching(
+  match_id = 'm5_RM_covars_2.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1/2
+)
+
+# addalmostexact

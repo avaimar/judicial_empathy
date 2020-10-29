@@ -15,7 +15,7 @@ library(stargazer) # Regression output formatting
 output <- 'Judicial_empathy/03_Output/02_Original_Paper/'
 
 # 1. Load data ------------------------------------
-data_judges <- fread('Judicial_empathy/01_Data/02_Cleaned_data/judges_cleaned.csv')
+data_judges <- fread('Judicial_empathy/01_Data/02_Cleaned_data/judges_replication.csv')
 
 # 2. Auxiliary variables -------------------------
 total_cases <- sum(data_judges$no_cases)
@@ -30,8 +30,6 @@ model2 <- lm(formula = progressive.vote ~ as.numeric(girls > 0) + factor(child),
              data = data_judges, 
              weights = no_cases / total_cases)
 
-# Note: the below two models will not match exactly until we use the cleaned data
-# that keeps missing values for age, race and religion
 model3 <- lm(formula = progressive.vote ~ as.numeric(girls > 0) + factor(child) + 
                factor(republican) + age + as.numeric(religion == 4) + woman + 
                as.numeric(race == 2) + as.numeric(race == 3),
@@ -53,8 +51,6 @@ model6 <- lm(formula = progressive.vote ~ as.numeric(girls > 0) + factor(child),
              data = data_judges[child %in% c(1:4)], 
              weights = no_cases / total_cases)
 
-# Note: the below two models will not match exactly until we use the cleaned data
-# that keeps missing values for age, race and religion
 model7 <- lm(formula = progressive.vote ~ as.numeric(girls > 0) + factor(child) + 
                factor(republican) + age + as.numeric(religion == 4) + woman + 
                as.numeric(race == 2) + as.numeric(race == 3),
