@@ -56,8 +56,11 @@ perform_matching <- function(
     match_id,
     dmatrix,
     variables,
-    caliper,
-    match_ratio
+    caliper = 0,
+    match_ratio = 1,
+    exact_variables = NULL,
+    almost_exact_variables = NULL,
+    fine_balance_variables = NULL
 ) {
     #......................................................................
     # perform_matching generates a distance matrix, matched pairs and covariate
@@ -84,12 +87,40 @@ perform_matching <- function(
         DM <- addcaliper(dmat = DM, z = data_judges$z, p = data_judges$pscore,
                          caliper = caliper)
     }
+  
+    # Add exact matching
+    if (!missing(exact_variables)) {
+        for (v in exact_variables) {
+            DM <- addalmostexact(dmat = DM, z = data_judges$z, 
+                           f = as.vector(data_judges[[v]]), mult = 100000) 
+        }
+    }
+  
+    # Add almost exact matching
+    if (!missing(almost_exact_variables)) {
+        for (v in almost_exact_variables) {
+            DM <- addalmostexact(dmat = DM, z = data_judges$z, 
+                                 f = as.vector(data_judges[[v]]), mult = 3) 
+        }
+    }
+  
+    # Add fine covariate balance
+    ## gives following error:
+    ## "Error in match_on.numeric(x, within = within, z = z, ...) : 
+    ## You must supply a treatment indicator, 'z', when using the numeric match_on method."
+    if (!missing(fine_balance_variables)) {
+         DM <- as.vector(rcbalance(DM, fb.list = fine_balance_variables, 
+                         treated.info = data_judges[data_judges$z==1,], 
+                         control.info = data_judges[data_judges$z==0,], 
+                         exclude.treated=TRUE)$matches)
+    }
     
     # Generate match
     if (match_ratio == 1) {
         gen_match <- pairmatch(x = DM, data=data_judges)
     } else {
-        gen_match <- fullmatch(x = DM, min.controls = match_ratio,
+        ## set max control instead of min controls. This is not really what we want
+        gen_match <- fullmatch(x = DM, max.controls = match_ratio,
                                data=data_judges)
     }
     

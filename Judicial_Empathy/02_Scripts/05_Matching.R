@@ -12,6 +12,7 @@ library(data.table) # Table manipulation
 library(DOS2) 
 library(optmatch)
 library(RItools)
+library(rcbalance)
 library(ggplot2) # Plots
 
 # Output directory
@@ -61,9 +62,7 @@ sum(data_judges$pscore > 0.999)
 perform_matching(
   match_id = 'm1_RM_covars.png',
   dmatrix = 'MD',
-  variables = covars,
-  caliper = 0,
-  match_ratio = 1
+  variables = covars
 )
 
 # Match 2. RMahalanobis (all covariates) adding caliper 1:1
@@ -71,8 +70,7 @@ perform_matching(
   match_id = 'm2_RM_covars_c.png',
   dmatrix = 'MD',
   variables = covars,
-  caliper = 0.1 * sd(data_judges$pscore),
-  match_ratio = 1
+  caliper = 0.1 * sd(data_judges$pscore)
 )
 
 # Match 3. Robust Mahalanobis distance (using dummies) 1:1
@@ -103,3 +101,21 @@ perform_matching(
 )
 
 # addalmostexact
+perform_matching(
+  match_id = 'm5_RM_covars_2.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  almost_exact_variables = c("child")
+)
+
+# fine balance -- ERROR
+perform_matching(
+  match_id = 'm5_RM_covars_2.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  fine_balance = c("circuit")
+)
