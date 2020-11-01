@@ -102,7 +102,7 @@ perform_matching(
 
 # addalmostexact
 perform_matching(
-  match_id = 'm5_RM_covars_2.png',
+  match_id = 'm6_RM_covars_1_am.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
@@ -111,11 +111,12 @@ perform_matching(
 )
 
 # fine balance -- ERROR
+# TODO Check warning
 perform_matching(
-  match_id = 'm5_RM_covars_2.png',
+  match_id = 'm7_RM_covars_1_fb.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
   match_ratio = 1,
-  fine_balance = c("circuit")
+  fine_balance_variables = c("circuit")
 )

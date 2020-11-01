@@ -50,6 +50,19 @@ cast.senm <- function(dat, ms.arg, two.outcomes=FALSE) {
     }
 }
 
+ms.transform <- function(dat.arg, ms.rcbal) {
+  ctrl <- seq(sum(dat.arg$z==0))
+  matched.ctrl <- ms.rcbal
+  unmatched.ctrl <- setdiff(ctrl,ms.rcbal)
+  
+  dat.tmp <- dat.arg
+  dat.tmp$foo <- NA
+  dat.tmp$foo[dat.tmp$z==1] <- matched.ctrl
+  dat.tmp$foo[dat.tmp$z==0][matched.ctrl] <- matched.ctrl
+  
+  return(dat.tmp$foo)    
+}
+
 
 # Matching function
 perform_matching <- function(
@@ -105,19 +118,18 @@ perform_matching <- function(
     }
   
     # Add fine covariate balance
-    ## gives following error:
-    ## "Error in match_on.numeric(x, within = within, z = z, ...) : 
-    ## You must supply a treatment indicator, 'z', when using the numeric match_on method."
     if (!missing(fine_balance_variables)) {
-         DM <- as.vector(rcbalance(DM, fb.list = fine_balance_variables, 
-                         treated.info = data_judges[data_judges$z==1,], 
-                         control.info = data_judges[data_judges$z==0,], 
+      DM  <- as.vector(rcbalance(DM, fb.list = fine_balance_variables, 
+                         treated.info = data_judges[z==1, variables, with=FALSE], 
+                         control.info = data_judges[z==0, variables, with=FALSE], 
                          exclude.treated=TRUE)$matches)
+      DM <- ms.transform(as.data.frame(data_judges), DM)
+      names(DM) <- rownames(data_judges)
     }
     
     # Generate match
     if (match_ratio == 1) {
-        gen_match <- pairmatch(x = DM, data=data_judges)
+        gen_match <- pairmatch(x = DM, data=data_judges, z=data_judges$z)
     } else {
         ## set max control instead of min controls. This is not really what we want
         gen_match <- fullmatch(x = DM, max.controls = match_ratio,
