@@ -1,4 +1,4 @@
-
+# Helper functions
 
 ## puts the results of a pair match in a nice form
 summarize.match <- function(dat, ms, ps.name="prop", keep.mset=FALSE) {
@@ -50,6 +50,7 @@ cast.senm <- function(dat, ms.arg, two.outcomes=FALSE) {
     }
 }
 
+
 ms.transform <- function(dat.arg, ms.rcbal) {
   ctrl <- seq(sum(dat.arg$z==0))
   matched.ctrl <- ms.rcbal
@@ -58,6 +59,35 @@ ms.transform <- function(dat.arg, ms.rcbal) {
   dat.tmp <- dat.arg
   dat.tmp$foo <- NA
   dat.tmp$foo[dat.tmp$z==1] <- matched.ctrl
+  dat.tmp$foo[dat.tmp$z==0][matched.ctrl] <- matched.ctrl
+  
+  return(dat.tmp$foo)    
+}
+
+ms.transform.adj <- function(dat.arg, ms.rcbal) {
+  # Note: This function has been modified to allow for the case
+  # in which we have more treatment than control units, and so
+  # each control unit is matched to one treatment unit, and some
+  # treatment units are dropped.
+  
+  matched.ctrl <- ms.rcbal
+  no_treated_units <- sum(dat.arg$z == 1)
+  
+  # Convert matching to a manageable data frame
+  ms.rcbal <- data.frame(i = rownames(ms.rcbal), c = ms.rcbal)
+  
+  # Expand matching vector to all treatment units
+  full.ms.rcbal <- data.table(expand.grid(i = factor(1:no_treated_units)))
+  full.ms.rcbal <- merge(full.ms.rcbal, 
+                         ms.rcbal, by = 'i', all.x = TRUE)
+  
+  dat.tmp <- dat.arg
+  dat.tmp$foo <- NA
+  
+  # Note: Because we have less T than C units, we can't simply
+  # apply the matched vector to treatment units, because some should
+  # be NA as they could not be matched.
+  dat.tmp$foo[dat.tmp$z==1] <- full.ms.rcbal$X1
   dat.tmp$foo[dat.tmp$z==0][matched.ctrl] <- matched.ctrl
   
   return(dat.tmp$foo)    
@@ -73,7 +103,9 @@ perform_matching <- function(
     match_ratio = 1,
     exact_variables = NULL,
     almost_exact_variables = NULL,
-    fine_balance_variables = NULL
+    fine_balance_variables = NULL,
+    data,
+    export = FALSE
 ) {
     #......................................................................
     # perform_matching generates a distance matrix, matched pairs and covariate
@@ -85,6 +117,12 @@ perform_matching <- function(
     #    - caliper : if 0, does not include caliper. Any value above zero includes
     #      a caliper in the distance matrix
     #    - match_ratio: an integer specifying the number of units to match
+    #    - exact_variables: character vector of variables to exact match on
+    #    - almost_exact_variables: character vector of variables to almost exact match on
+    #    - fine_balance_variables: character vector of variables to fine balance on
+    #    - data: data.table including the data for matching
+    #    - export: Boolean indicating whether to export the data including the
+    #      generated match
     #.....................................................................
     # Generate distance matrix
     if (dmatrix == 'MD') {
@@ -119,24 +157,27 @@ perform_matching <- function(
   
     # Add fine covariate balance
     if (!missing(fine_balance_variables)) {
-      DM  <- as.vector(rcbalance(DM, fb.list = fine_balance_variables, 
-                         treated.info = data_judges[z==1, variables, with=FALSE], 
-                         control.info = data_judges[z==0, variables, with=FALSE], 
-                         exclude.treated=TRUE)$matches)
-      DM <- ms.transform(as.data.frame(data_judges), DM)
-      names(DM) <- rownames(data_judges)
+      rc_match <- rcbalance(DM, fb.list = list(fine_balance_variables), 
+                            treated.info = data[z==1, variables, with=FALSE], 
+                            control.info = data[z==0, variables, with=FALSE], 
+                            exclude.treated=TRUE)$matches
+      
+      
+      DM <- ms.transform.adj(dat.arg = as.data.frame(data), 
+                             ms.rcbal = rc_match)
+      names(DM) <- rownames(data)
     }
     
     # Generate match
     if (match_ratio == 1) {
-        gen_match <- pairmatch(x = DM, data=data_judges, z=data_judges$z)
+        gen_match <- pairmatch(x = DM, data=data, z=data$z)
     } else {
         ## set max control instead of min controls. This is not really what we want
         gen_match <- fullmatch(x = DM, max.controls = match_ratio,
-                               data=data_judges)
+                               data=data)
     }
     
-    match_summary <- summarize.match(as.data.frame(data_judges), gen_match, 
+    match_summary <- summarize.match(as.data.frame(data), gen_match, 
                                      ps.name = 'pscore')
     
     # Generate plot
@@ -145,6 +186,13 @@ perform_matching <- function(
                '+ pscore + strata(gen_match) - 1'))
     
     png(paste0(output, match_id))
-    plot(xBalance(gen_formula, data = data_judges))
+    plot(xBalance(gen_formula, data = data))
     dev.off()
+    
+    # Export match
+    if (export != FALSE) {
+      new_data <- copy(data)
+      new_data <- new_data[, matches := gen_match]
+      fwrite(x = new_data, file = export)
+    }
 }

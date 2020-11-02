@@ -2,7 +2,7 @@
 # Script: 05_Matching.R
 # Inputs:
 #   * Cleaned case data (as modified for the project)
-#     File: Judicial_empathy/01_Data/01_Cleaned_data/judges_cleaned.csv !!!!!!!!!!!!!!!!!!
+#     File: Judicial_empathy/01_Data/01_Cleaned_data/judges_cleaned.csv
 # Outputs:
 #   * Matched pairs to be used for analysis at 03_Output/03_Matching/
 
@@ -62,7 +62,8 @@ sum(data_judges$pscore > 0.999)
 perform_matching(
   match_id = 'm1_RM_covars.png',
   dmatrix = 'MD',
-  variables = covars
+  variables = covars,
+  data = data_judges
 )
 
 # Match 2. RMahalanobis (all covariates) adding caliper 1:1
@@ -70,7 +71,8 @@ perform_matching(
   match_id = 'm2_RM_covars_c.png',
   dmatrix = 'MD',
   variables = covars,
-  caliper = 0.1 * sd(data_judges$pscore)
+  caliper = 0.1,
+  data = data_judges
 )
 
 # Match 3. Robust Mahalanobis distance (using dummies) 1:1
@@ -79,7 +81,8 @@ perform_matching(
   dmatrix = 'MD',
   variables = covars_and_dummies,
   caliper = 0,
-  match_ratio = 1
+  match_ratio = 1,
+  data = data_judges
 )
 
 # Match 4. RMahalanobis (using dummies) adding caliper 1:1
@@ -87,36 +90,85 @@ perform_matching(
   match_id = 'm4_RM_cdummies_c.png',
   dmatrix = 'MD',
   variables = covars_and_dummies,
-  caliper = 0.1 * sd(data_judges$pscore),
-  match_ratio = 1
+  caliper = 0.1,
+  match_ratio = 1,
+  data = data_judges
 )
 
 # Match 5. Robust Mahalanobis distance (all covariates) 1:2
+# NOTE: match_ratio returns variable matching !
 perform_matching(
   match_id = 'm5_RM_covars_2.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
-  match_ratio = 1/2
+  match_ratio = 1/2,
+  data = data_judges
 )
 
-# addalmostexact
+# Match 6. Almost exact on child
 perform_matching(
   match_id = 'm6_RM_covars_1_am.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
   match_ratio = 1,
-  almost_exact_variables = c("child")
+  almost_exact_variables = c("child"),
+  data = data_judges
 )
 
-# fine balance -- ERROR
-# TODO Check warning
+# Match 7. Fine balance on circuit
 perform_matching(
   match_id = 'm7_RM_covars_1_fb.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
   match_ratio = 1,
-  fine_balance_variables = c("circuit")
+  fine_balance_variables = c("circuit"),
+  data = data_judges
+)
+
+# Match 8. Fine balance women and child
+perform_matching(
+  match_id = 'm8_RM_covars_1_fb.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  fine_balance_variables = c("woman", "child"),
+  data = data_judges
+)
+
+# Match 9. Exact balance women and child
+perform_matching(
+  match_id = 'm9_RM_covars_1_ne.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  exact_variables = c('woman', 'child'),
+  data = data_judges
+)
+
+# Match 10. Exact matching on woman
+perform_matching(
+  match_id = 'm10_RM_covars_1_e.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  exact_variables = c('woman'),
+  data = data_judges
+)
+
+# Match 11. Exact matching on woman, almost exact child
+perform_matching(
+  match_id = 'm11_RM_covars_1_e_ae.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 1,
+  almost_exact_variables = c('child'),
+  exact_variables = c('woman'),
+  data = data_judges
 )
