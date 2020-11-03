@@ -34,8 +34,8 @@ covars <- c('child', 'woman', 'age', 'republican', 'no_cases',
 
 # Create vector of covariates (including dummies)
 covars_and_dummies <- c('child', 'woman', 'age', 'republican', 'no_cases',
-                        'agemiss', 'religmiss', 'racemiss',
-                        grep('circuit', colnames(data_judges), value = TRUE),
+                        'agemiss', 'religmiss', 'racemiss', 'circuit',
+                        #grep('circuit', colnames(data_judges), value = TRUE),
                         grep('race', colnames(data_judges), value = TRUE),
                         grep('religion', colnames(data_judges),value = TRUE))
 
@@ -96,13 +96,12 @@ perform_matching(
 )
 
 # Match 5. Robust Mahalanobis distance (all covariates) 1:2
-# NOTE: match_ratio returns variable matching !
 perform_matching(
   match_id = 'm5_RM_covars_2.png',
   dmatrix = 'MD',
   variables = covars,
   caliper = 0,
-  match_ratio = 1/2,
+  match_ratio = 2,
   data = data_judges
 )
 
@@ -161,6 +160,7 @@ perform_matching(
   data = data_judges
 )
 
+
 # Match 11. Exact matching on woman, almost exact child
 perform_matching(
   match_id = 'm11_RM_covars_1_e_ae.png',
@@ -169,6 +169,28 @@ perform_matching(
   caliper = 0,
   match_ratio = 1,
   almost_exact_variables = c('child'),
+  exact_variables = c('woman'),
+  data = data_judges
+)
+
+# Match 12. Exact matching on woman
+perform_matching(
+  match_id = 'm12_RM_covars_1_e.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0,
+  match_ratio = 1,
+  exact_variables = c('woman'),
+  data = data_judges
+)
+
+# Match 13. RM distance 1:2 and exact match on woman
+perform_matching(
+  match_id = 'm13_RM_covars_2.png',
+  dmatrix = 'MD',
+  variables = covars,
+  caliper = 0,
+  match_ratio = 2,
   exact_variables = c('woman'),
   data = data_judges
 )

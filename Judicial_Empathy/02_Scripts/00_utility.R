@@ -124,75 +124,82 @@ perform_matching <- function(
     #    - export: Boolean indicating whether to export the data including the
     #      generated match
     #.....................................................................
-    # Generate distance matrix
-    if (dmatrix == 'MD') {
-        DM <- smahal(z = data_judges$z, 
-                     X = data_judges[, variables, with = FALSE])
-        
-    } else {
-        stop('Pending implementation')
-    }
-    
-    # Add caliper if selected
-    if (caliper > 0) {
-        DM <- addcaliper(dmat = DM, z = data_judges$z, p = data_judges$pscore,
-                         caliper = caliper)
-    }
   
-    # Add exact matching
-    if (!missing(exact_variables)) {
-        for (v in exact_variables) {
-            DM <- addalmostexact(dmat = DM, z = data_judges$z, 
-                           f = as.vector(data_judges[[v]]), mult = 100000) 
-        }
-    }
+  # Gather number of units
+  n_control <- sum(data$z == 0)
+  n_treated <- sum(data$z == 1)
   
-    # Add almost exact matching
-    if (!missing(almost_exact_variables)) {
-        for (v in almost_exact_variables) {
-            DM <- addalmostexact(dmat = DM, z = data_judges$z, 
-                                 f = as.vector(data_judges[[v]]), mult = 3) 
-        }
-    }
-  
-    # Add fine covariate balance
-    if (!missing(fine_balance_variables)) {
-      rc_match <- rcbalance(DM, fb.list = list(fine_balance_variables), 
-                            treated.info = data[z==1, variables, with=FALSE], 
-                            control.info = data[z==0, variables, with=FALSE], 
-                            exclude.treated=TRUE)$matches
+  # Generate distance matrix
+  if (dmatrix == 'MD') {
+      DM <- smahal(z = data$z, 
+                   X = data[, variables, with = FALSE])
       
-      
-      DM <- ms.transform.adj(dat.arg = as.data.frame(data), 
-                             ms.rcbal = rc_match)
-      names(DM) <- rownames(data)
-    }
+  } else {
+      stop('Pending implementation')
+  }
+  
+  # Add caliper if selected
+  if (caliper > 0) {
+      DM <- addcaliper(dmat = DM, z = data$z, p = data$pscore,
+                       caliper = caliper)
+  }
+
+  # Add exact matching
+  if (!missing(exact_variables)) {
+      for (v in exact_variables) {
+          DM <- addalmostexact(dmat = DM, z = data$z, 
+                         f = as.vector(data[[v]]), mult = 100000) 
+      }
+  }
+
+  # Add almost exact matching
+  if (!missing(almost_exact_variables)) {
+      for (v in almost_exact_variables) {
+          DM <- addalmostexact(dmat = DM, z = data$z, 
+                               f = as.vector(data[[v]]), mult = 3) 
+      }
+  }
+
+  # Add fine covariate balance
+  if (!missing(fine_balance_variables)) {
+    rc_match <- rcbalance(DM, fb.list = list(fine_balance_variables), 
+                          treated.info = data[z==1, variables, with=FALSE], 
+                          control.info = data[z==0, variables, with=FALSE], 
+                          exclude.treated=TRUE)$matches
     
-    # Generate match
-    if (match_ratio == 1) {
-        gen_match <- pairmatch(x = DM, data=data, z=data$z)
-    } else {
-        ## set max control instead of min controls. This is not really what we want
-        gen_match <- fullmatch(x = DM, max.controls = match_ratio,
-                               data=data)
-    }
     
-    match_summary <- summarize.match(as.data.frame(data), gen_match, 
-                                     ps.name = 'pscore')
-    
-    # Generate plot
-    gen_formula = as.formula(
-        paste0('z ~', paste(variables, collapse =  '+'),
-               '+ pscore + strata(gen_match) - 1'))
-    
-    png(paste0(output, match_id))
-    plot(xBalance(gen_formula, data = data))
-    dev.off()
-    
-    # Export match
-    if (export != FALSE) {
-      new_data <- copy(data)
-      new_data <- new_data[, matches := gen_match]
-      fwrite(x = new_data, file = export)
-    }
+    DM <- ms.transform.adj(dat.arg = as.data.frame(data), 
+                           ms.rcbal = rc_match)
+    names(DM) <- rownames(data)
+  }
+  
+  # Generate match
+  if (match_ratio == 1) {
+      gen_match <- pairmatch(x = DM, data=data, z=data$z)
+  } else {
+      ## set max control instead of min controls. This is not really what we want
+      gen_match <- fullmatch(x = DM, max.controls = 1/(match_ratio -1), 
+                             min.controls = 1/(match_ratio -1), 
+                             omit.fraction = ((match_ratio -1) * n_control - n_treated)/n_treated,
+                             data=data)
+  }
+  
+  match_summary <- summarize.match(as.data.frame(data), gen_match, 
+                                   ps.name = 'pscore')
+  
+  # Generate plot
+  gen_formula = as.formula(
+      paste0('z ~', paste(variables, collapse =  '+'),
+             '+ pscore + strata(gen_match) - 1'))
+  
+  png(paste0(output, match_id))
+  plot(xBalance(gen_formula, data = data))
+  dev.off()
+  
+  # Export match
+  if (export != FALSE) {
+    new_data <- copy(data)
+    new_data <- new_data[, matches := gen_match]
+    fwrite(x = new_data, file = export)
+  }
 }
