@@ -33,7 +33,8 @@ summarize.match <- function(dat, ms, ps.name="prop", keep.mset=FALSE) {
 cast.senm <- function(dat, ms.arg, two.outcomes=FALSE) {
     ms <- as.vector(ms.arg)
 
-    y <- dat$y[!is.na(ms)]
+    #y <- dat$y[!is.na(ms)]
+    y = dat$progressive.vote[!is.na(ms)]
     mset <- ms[!is.na(ms)]
     z <- dat$z[!is.na(ms)]
     
