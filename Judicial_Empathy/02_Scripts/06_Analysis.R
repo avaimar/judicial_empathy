@@ -24,8 +24,7 @@ output <- 'Judicial_empathy/03_Output/04_Analysis/'
 source('Judicial_empathy/02_Scripts/00_utility.R')
 
 # Parameters
-#selected_match <- 'Judicial_empathy/03_Output/03_Matching/[INSERT MATCH HERE].csv'
-selected_match <- '../trial_export'
+selected_match <- 'Judicial_empathy/03_Output/03_Matching/[INSERT MATCH HERE].csv'
 
 # 1. Load data ------------------------------------
 # Matched judge data
