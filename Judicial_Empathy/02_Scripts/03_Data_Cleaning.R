@@ -1,16 +1,21 @@
+
+# 0. Working set up -----------------------------
 library(data.table)
 library(ggplot2)
 library(dplyr)
 library(varhandle)
+library(glmnet) # lasso
 
+# 1. Load data ---------------------------------
 data_cases <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_case_1.csv", check.names = TRUE)
 data_judges <- fread("Judicial_empathy/01_Data/01_Raw_data/glynn_sen_daughters_by_judge.csv", check.names = TRUE)
 
-## subset cases to match method from paper
+## 2. Subset cases to match method from paper -------
 cases_small = subset(data_cases, area == "employment" | area == "Title IX" | area == "pregnancy" | area == "abortion" | area == "reproductive rights")
 cases_small = subset(cases_small, femplaintiff == 1)
 cases_small$area <- factor(cases_small$area, levels = c("abortion","employment","pregnancy","reproductive rights","Title IX"))
 
+# 3. Judge data -------------------------------
 ## get number of cases for each judge
 cases_per_judge <- cases_small[,.(no_cases = .N), by=name]
 data_judges <- merge(data_judges, cases_per_judge, by='name')
@@ -130,4 +135,81 @@ setcolorder(judges_small, c('name', 'z'))
 
 # Write cleaned dataset
 write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv',
+          row.names = FALSE)
+
+# 4. Case data -----------------------------------
+# Get unique columns
+cases_small <- cases_small[, .SD, .SDcols = unique(colnames(cases_small))]
+
+# * 4.1 Add treatment column ------------------------
+cases_small <- merge(cases_small, 
+                     judges_small[, .(songerID, z)], 
+                     by = 'songerID', all.x = TRUE)
+
+# Check units with missing treatments
+sum(is.na(cases_small$z))
+missing_judges <- unique(cases_small[is.na(z)]$name)
+length(missing_judges)
+
+# Why are these missing treatment?
+# Only 45 judges were in the judge data
+sum(missing_judges %in% data_judges$name)
+missing_judges_in_data <- missing_judges[missing_judges %in% data_judges$name]
+
+# These 45 judges either have no children or no info on girls/boys
+table(data_judges[name %in% missing_judges_in_data,]$child, 
+      data_judges[name %in% missing_judges_in_data,]$girls)
+
+# Therefore, we drop these units with missing treatments
+cases_small <- cases_small[!is.na(z)]
+
+# * 4.2 Check missings ---------------------------
+missing_cols <- data.table(
+  column = names(colMeans(is.na(cases_small))),
+  missing_perc = colMeans(is.na(cases_small)))
+hist(missing_cols$missing_perc)
+
+# Drop columns with over 85% missing values
+sum(missing_cols$missing_perc >= 0.85)
+cases_small <- 
+  cases_small[, .SD, .SDcols = missing_cols[missing_perc < 0.85,]$column]
+
+# Notice that by dropping to columns with less than 30% missing values
+# we are simply removing 245 - 223 = 22 columns
+cases_small <- 
+  cases_small[, .SD, .SDcols = missing_cols[missing_perc < 0.3,]$column]
+
+# * 4.3 Drop meaningless covariates --------------------------
+covariates <- colnames(cases_small)
+
+# Drop treatment and outcome
+covariates <- covariates[!(covariates %in% c('vote', 'progressive.vote', 'z'))]
+
+# We drop the following covariates which are unique to each case
+#   * casename
+#   * name, name.1, capsnames
+#   * pname
+#   * cite
+#   * docket
+covariates <- covariates[!(covariates %in% c('casename', 'name', 'name.1', 
+                                             'capsnames', 'pname', 'cite', 'docket'))]
+
+# We also drop the covariates at the judge level as these will be used
+# only for matching.
+#   * girls, sons, republican, race, 
+covariates <- covariates[!(covariates %in% c('girls', 'sons', 'woman', 'child', 'race',
+                                             'republican', 'circuit', 'circuit.1', 'age',
+                                             'religion', 'yearb'))]
+# Note: We leave 'songerID' as an identifier to map to judge matches in analysis
+
+# * 4.3 Use lasso to identify important covariates --------
+#m1_lasso <- 
+#  glmnet(x = as.matrix(cases_small[, .SD, .SDcols = covariates]),
+#         y = cases_small$z,
+#         family = 'binomial',
+#         alpha = 1)
+
+# * 4. Write cleaned dataset --------------------
+cases_small <- cases_small[, .SD, .SDcols = c('z', 'vote', covariates)]
+write.csv(cases_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv',
           row.names = FALSE)
