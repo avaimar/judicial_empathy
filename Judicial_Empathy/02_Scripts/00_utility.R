@@ -179,9 +179,9 @@ perform_matching <- function(
       gen_match <- pairmatch(x = DM, data=data, z=data$z)
   } else {
       ## set max control instead of min controls. This is not really what we want
-      gen_match <- fullmatch(x = DM, max.controls = 1/(match_ratio -1), 
-                             min.controls = 1/(match_ratio -1), 
-                             omit.fraction = ((match_ratio -1) * n_control - n_treated)/n_treated,
+      gen_match <- fullmatch(x = DM, max.controls = 1/(match_ratio), 
+                             min.controls = 1/(match_ratio), 
+                             omit.fraction = ((match_ratio) * n_control - n_treated)/n_treated,
                              data=data)
   }
   

@@ -157,7 +157,8 @@ perform_matching(
   caliper = 0,
   match_ratio = 1,
   exact_variables = c('woman'),
-  data = data_judges
+  data = data_judges,
+  export = paste0(output, 'match10.csv')
 )
 
 
