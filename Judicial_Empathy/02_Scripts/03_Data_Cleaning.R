@@ -321,5 +321,5 @@ cases_small <- cases_small[, .SD, .SDcols =
                              c('V1', cov_1_judges, cov_4_case_info, 'z', 'vote')]
 
 # * 4. Write cleaned dataset --------------------
-write.csv(cases_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned.csv',
+write.csv(cases_small, 'Judicial_empathy/01_data/02_Cleaned_data/cases_cleaned.csv',
           row.names = FALSE)
