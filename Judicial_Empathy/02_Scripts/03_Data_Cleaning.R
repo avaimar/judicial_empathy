@@ -319,7 +319,43 @@ covariates[!(covariates %in%c(cov_1_judges, cov_2_case_ID, cov_3_add_judges_appo
 # unique case ID
 cases_small <- cases_small[, .SD, .SDcols = 
                              c('V1', cov_1_judges, cov_4_case_info, 'z', 'vote')]
+setnames(cases_small, 'V1', 'case_ID')
 
-# * 4. Write cleaned dataset --------------------
+# * 4.4. Final changes ---------------------
+# Drop source1 and source2 as these have a single value, and yearb
+cases_small <- cases_small[, c('source1', 'source2', 'yearb') := NULL]
+
+# Note that for 9% of cases circuit and circuit.1 differ. We stay with circuit.1
+# as this is the column used for the judge data and as circuit has some strings
+# that aren't mapped to circuit numbers.
+cases_small <- cases_small[, circuit:= NULL]
+setnames(cases_small, 'circuit.1', 'circuit')
+
+# We have one case with missing value for the outcome. 
+cases_small <- cases_small[case_ID != 1693]
+
+# Create missing dummies
+## Add indicator variables for missing values
+cases_small$agemiss <- as.numeric(is.na(cases_small$age))
+cases_small$religmiss <- as.numeric(is.na(cases_small$religion))
+cases_small$racemiss <- as.numeric(is.na(cases_small$race))
+cases_small$circuitmiss <- as.numeric(is.na(cases_small$circuit))
+
+## convert missing values to 0s
+cases_small[is.na(cases_small)] <- 0
+
+## convert categorical attributes to binary indicators
+race_indicator <- to.dummy(cases_small$race, "race")
+cases_small <- cbind(cases_small, race_indicator)
+
+cases_small[cases_small$religion %in% c(9, 11, 16, 17, 21, 24)]$religion <- 9
+relig_indicator <- to.dummy(cases_small$religion, "religion")
+cases_small <- cbind(cases_small, relig_indicator)
+
+# For circuit, correct name first so as to not create duplicate column
+circuit_indicator <- to.dummy(cases_small$circuit, "circuit")
+cases_small <- cbind(cases_small, circuit_indicator)
+
+# * 4.5 Write cleaned dataset --------------------
 write.csv(cases_small, 'Judicial_empathy/01_data/02_Cleaned_data/cases_cleaned.csv',
           row.names = FALSE)
