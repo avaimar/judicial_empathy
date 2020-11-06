@@ -19,6 +19,8 @@ library(optmatch)
 library(sensitivitymult)
 library(ggplot2) # Plots
 library(bbplot) # Plots
+library(coin) # wilcoxon signed rank test
+library(ri2)
 
 # Output directory
 output <- 'Judicial_empathy/03_Output/04_Analysis/'
@@ -56,12 +58,12 @@ FRT <- senm(y = matches_transformed$y,
             trim=Inf,
             alternative = 'greater')
 
-print('Gamma = 1 pvalue: ', FRT$pval)
+cat('Gamma = 1 pvalue: ', FRT$pval)
 # hopefully above pval will be smaller than 0.05
 
 # * 2.2 Sensitivity analysis ----------------------
 
-gammas <- seq(from = 1, to = 5, by = 0.05)
+gammas <- seq(from = 1, to = 5, by = 0.005)
 max_gamma = 1
 for (i in gammas) {
     sen <- senm(y = matches_transformed$y,
@@ -77,7 +79,7 @@ for (i in gammas) {
         break
     }
 }
-print('Sensitivity gamma: ', max_gamma)
+cat('Sensitivity gamma: ', max_gamma)
 
 # * 2.3 Stability analysis ----------------------
 
@@ -145,7 +147,7 @@ g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) +
   geom_boxplot() +
   geom_point(data = missings_grouped, aes(x = type, y = outcome_diff),
              shape = 4) +
-  bbc_style() + 
+  #bbc_style() + 
   labs(x = '', y = 'Difference in outcomes') + 
   theme(axis.text = element_text(size=8),
         strip.text = element_text(size = 8)) + 
@@ -171,28 +173,70 @@ exact_matches <-
 
 # Reshape so as to calculate differences between matched groups
 grouped_data_judges <- dcast(grouped_data_judges,
-                             formula = matches + woman + republican ~ z,
-                             value.var = 'avg_outcome')
-grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
+                             #formula = matches + woman + republican ~ z,
+                             formula = matches ~ z,
+                             value.var = c('woman', 'republican', 'avg_outcome'))
+#grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
+grouped_data_judges <- grouped_data_judges[, outcome_diff := `avg_outcome_1` - `avg_outcome_0`]
 grouped_data_judges <- grouped_data_judges[!is.na(matches)]
 
 # Merge exact matches
 grouped_data_judges <- merge(grouped_data_judges, exact_matches, by = 'matches', all.x = TRUE)
 
 # Test for women
-wilcox.test(grouped_data_judges[woman == 0 & woman_match ==1]$outcome_diff,
-            grouped_data_judges[woman == 1 & woman_match ==1]$outcome_diff, 
+#wilcox.test(grouped_data_judges[woman == 0 & woman_match ==1]$outcome_diff,
+#            grouped_data_judges[woman == 1 & woman_match ==1]$outcome_diff, 
+#            mu=0, paired=FALSE)
+
+## I think we should use wilcox_test instead of wilcox.test (in package `coin`)
+## for breaking ties
+## but I'm having trouble with the installation (again)
+wilcox.test(grouped_data_judges[woman_0 == 0 & woman_match ==1]$outcome_diff,
+            grouped_data_judges[woman_0 == 1 & woman_match ==1]$outcome_diff, 
             mu=0, paired=FALSE)
 
 # Test for republican/democrat
-wilcox.test(grouped_data_judges[republican == 0 & republican_match ==1]$outcome_diff,
-            grouped_data_judges[republican == 1 & republican_match ==1]$outcome_diff,
+wilcox.test(grouped_data_judges[republican_0 == 0 & republican_match ==1]$outcome_diff,
+            grouped_data_judges[republican_0 == 1 & republican_match ==1]$outcome_diff,
             mu=0, paired=FALSE)
 
 # 3. Case data ------------------------------------
+## TODO: add matches to case data
+
 # * 3.1 Obtain residuals --------------------------
 
+## TODO: should we add dummy variables for factors and 
+## add indicator variables for missinh columns? 
+
+model = lm(vote ~ child + woman + race + republican + circuit + age + religion 
+           + yearb + year + area, data=data_cases)
+residuals = resid(model)
+
 # * 3.2 FRT ---------------------------------------
+
+ranks = rank(residuals)
+# this doesnt work with now because  
+# NAs arent handled correctly
+data_cases$resid_ranks <- ranks
+
+### OUTLINE OF TEST STATISTIC ###
+test_statistic <- function(data) {
+    grouped_data <- 
+    data[, .(avg_resid_rank = mean(ranks),
+                        by = .(matches, z))]
+  
+    # Reshape so as to calculate differences between matched groups
+    grouped_datas <- dcast(grouped_data,
+                           formula = matches ~ z,
+                           value.var = 'avg_resid_rank')
+    
+    grouped_data <- grouped_data_judges[, outcome_diff := `avg_resid_rank_1` - `avg_resid_rank_0`]
+    return(sum(grouped_data$outcome_diff))
+}
+
+## something like this I believe
+conduct_ri(test_function = test_statistic, declaration = declare_ra(N = 74, m = 37), 
+           sharp_hypothesis = 0, data = data_cases)
 
 # * 3.3 Sensitivity analysis ----------------------
 
