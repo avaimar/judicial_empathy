@@ -60,8 +60,6 @@ print('Gamma = 1 pvalue: ', FRT$pval)
 # hopefully above pval will be smaller than 0.05
 
 # * 2.2 Sensitivity analysis ----------------------
-## test out various values of gamma until we find one that gives us an insignificant result?
-## something similar to this?
 
 gammas <- seq(from = 1, to = 5, by = 0.05)
 max_gamma = 1
@@ -131,14 +129,27 @@ missing_var_differences <-
                                                levels = c('agemiss', 'religmiss', 'racemiss'),
                                                labels = c('Age', 'Religion', 'Race'))]
 
+# Obtain observations related to missings for scatter part of plot
+missings_grouped <- 
+  copy(grouped_data_judges[, .(matches, agemiss, religmiss, racemiss, outcome_diff)])
+missings_grouped <- melt(missings_grouped, 
+                         id.vars = c('matches', 'outcome_diff'), 
+                         variable.name = 'mis_variable')
+missings_grouped <- missings_grouped[value == 1]
+
+# Assign type "non-missing observations" so it'll appear in that part of the plot
+missings_grouped <- missings_grouped[, type := 'Non-missing observations']
+
 # Plot
 g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) + 
   geom_boxplot() +
+  geom_point(data = missings_grouped, aes(x = type, y = outcome_diff),
+             shape = 4) +
   bbc_style() + 
   labs(x = '', y = 'Difference in outcomes') + 
   theme(axis.text = element_text(size=8),
         strip.text = element_text(size = 8)) + 
-  facet_wrap(variable ~.)
+  facet_wrap(variable ~.) 
 ggsave(filename = paste0(output, '01_stability_analysis.png'), scale = 1.4,
        units = 'in', width = 6, height = 3)
 
@@ -152,20 +163,31 @@ grouped_data_judges <-
                           republican = sum(republican)),
                       by = .(matches, z)]
 
-# Drop pairs that are not exactly matched 
-# HERE -------------------------------------------------------
-grouped_woman <- copy(grouped_data_judges[, .(woman = sum(woman)), by = matches])
+exact_matches <-
+  grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 2, 1, 0),
+                          republican_match = 
+                            ifelse(sum(republican) == 0 | sum(republican) == 2, 1, 0)), 
+                      by = matches]
 
 # Reshape so as to calculate differences between matched groups
 grouped_data_judges <- dcast(grouped_data_judges,
                              formula = matches + woman + republican ~ z,
                              value.var = 'avg_outcome')
 grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
+grouped_data_judges <- grouped_data_judges[!is.na(matches)]
 
-# x: covariate of interest (e.g woman, republican, etc.)
-# we should only consider those pairs that match exactly on the covariate
-# wolcox.test(differences[differences$x == 0]$average_outcome,
-#             differences[differences$x ==1]$average_outcome, mu=0, paired=False)
+# Merge exact matches
+grouped_data_judges <- merge(grouped_data_judges, exact_matches, by = 'matches', all.x = TRUE)
+
+# Test for women
+wilcox.test(grouped_data_judges[woman == 0 & woman_match ==1]$outcome_diff,
+            grouped_data_judges[woman == 1 & woman_match ==1]$outcome_diff, 
+            mu=0, paired=FALSE)
+
+# Test for republican/democrat
+wilcox.test(grouped_data_judges[republican == 0 & republican_match ==1]$outcome_diff,
+            grouped_data_judges[republican == 1 & republican_match ==1]$outcome_diff,
+            mu=0, paired=FALSE)
 
 # 3. Case data ------------------------------------
 # * 3.1 Obtain residuals --------------------------
