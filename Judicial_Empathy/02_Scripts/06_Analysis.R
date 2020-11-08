@@ -239,25 +239,60 @@ test_statistic <- function(grouped_data) {
     # Reshape so as to calculate differences between matched groups
     grouped_data <- dcast(grouped_data,
                            formula = matches ~ z,
-                           value.var = 'avg_resid_rank')
-    #print(grouped_data)
-    grouped_data <- grouped_data[, outcome_diff := `1` - `0`]
+                           value.var = c('weights', 'avg_resid_rank'))
+    
+    grouped_data <- grouped_data[, outcome_diff := `avg_resid_rank_1` - `avg_resid_rank_0`]
+    
+    ## WEIGHTING PROCEDURE:
+    ## can set weights equal to 1 (so that each cluster is equally weighted)
+    ## or weight by the number of cases in each cluster divided by the total
+    grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
     
     return(sum(grouped_data$outcome_diff))
+    # return(sum(grouped_data$outcome_diff)/2) # <- this is the test stat used by senm function!
+    # gives the same results
+    #return(sum(grouped_data$weighted_outcome_diff))
 }
 
 grouped_data_cases <- 
-  cases_matched[, .(avg_resid_rank = mean(resid_ranks)),
+  cases_matched[, .(avg_resid_rank = mean(resid_ranks), n_cases = .N),
        by = .(matches, z)]
+
+weights <- grouped_data_cases[, .(weight = n_cases/sum(n_cases))]
+grouped_data_cases$weights = weights
 
 ## this specifies our randomization procedure
 ## within each block, one unit assigned treatment and one unit assigned control
+## per "Clustered Treatment Assignments ... Observational Studies:
+## "Weights ws ∝ ns1 + ns2 are particularly relevant when one suspects that the treatment
+## effect may be larger in some cluster pairs than in others."
 declaration = declare_ra(blocks = as.vector(grouped_data_cases$matches), 
                          block_m_each = cbind(rep(1, 37), rep(1, 37)))
 
 conduct_ri(test_function = test_statistic, declaration = declaration, 
-           sharp_hypothesis = 0, data = grouped_data_cases, assignment = "z", sims = 3000)
+           sharp_hypothesis = 0, data = grouped_data_cases, assignment = "z", p='upper', sims = 5000)
+
+
+### might this work as well? identical to above test statistic but with weights = 1/2 
+## because lambda = 1/2 by default
+cases_transformed = cast.senm(grouped_data_cases, grouped_data_cases$matches)
+
+### NOTE: senm does not actually compute stratified DIM! it weights all groups equally and 
+### does not divide by the total number of clusters.
+## setting TonT = TRUE computes DIM but p value stays exactly the same
+FRT <- senm(y = cases_transformed$y,
+            z = cases_transformed$z, 
+            mset = cases_transformed$mset, 
+            gamma = 1,
+            inner = 0,
+            tau = 0,
+            trim=Inf,
+            alternative = 'greater')
+FRT$pval
 
 # * 3.3 Sensitivity analysis ----------------------
 
-# * 3.4 Sensibility analysis ----------------------
+# if we don't get statistically significant result, I don't know 
+# if there's anything to do here
+
+# * 3.4 Stability analysis ----------------------
