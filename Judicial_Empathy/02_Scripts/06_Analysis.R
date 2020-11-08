@@ -29,7 +29,7 @@ output <- 'Judicial_empathy/03_Output/04_Analysis/'
 source('Judicial_empathy/02_Scripts/00_utility.R')
 
 # Parameters
-selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10.csv'
+selected_match <- 'Judicial_empathy/03_Output/03_Matching/[INSERT_MATCH_HERE].csv'
 
 # 1. Load data ------------------------------------
 # Matched judge data
@@ -208,35 +208,55 @@ wilcox.test(grouped_data_judges[republican_0 == 0 & republican_match ==1]$outcom
 ## TODO: should we add dummy variables for factors and 
 ## add indicator variables for missinh columns? 
 
-model = lm(vote ~ child + woman + race + republican + circuit + age + religion 
-           + yearb + year + area, data=data_cases)
+## TODO: "area" is a categorical column.. to use it in regression model
+## we should convert it to dummy columns
+
+cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], by = 'songerID')
+cases_matched <- cases_matched[cases_matched$matches != '']
+
+model = lm(vote ~ child + woman + republican + circuit + age + 
+             race.0 + race.1 + race.2 + race.3 + race.4 + racemiss + 
+             religion.0 + religion.1 + religion.2 + religion.3 + religion.4 +
+             religion.5 + religion.7 + religion.8 + religion.9 + religion.10 +
+             religion.99 + religmiss +
+             circuitmiss + circuit.0 + circuit.1 + circuit.2 + circuit.3 + circuit.4 +
+             circuit.5 + circuit.6 + circuit.7 + circuit.8 + circuit.9 + circuit.10 +
+             circuit.11 + circuit.12 +
+             year, data=cases_matched)
 residuals = resid(model)
 
 # * 3.2 FRT ---------------------------------------
 
 ranks = rank(residuals)
-# this doesnt work with now because  
-# NAs arent handled correctly
-data_cases$resid_ranks <- ranks
+cases_matched$resid_ranks <- ranks
 
 ### OUTLINE OF TEST STATISTIC ###
-test_statistic <- function(data) {
-    grouped_data <- 
-    data[, .(avg_resid_rank = mean(ranks),
-                        by = .(matches, z))]
-  
+test_statistic <- function(grouped_data) {
+    # grouped_data <- 
+    # data[, .(avg_resid_rank = mean(resid_ranks)),
+    #                     by = .(matches, z)]
+     
     # Reshape so as to calculate differences between matched groups
-    grouped_datas <- dcast(grouped_data,
+    grouped_data <- dcast(grouped_data,
                            formula = matches ~ z,
                            value.var = 'avg_resid_rank')
+    #print(grouped_data)
+    grouped_data <- grouped_data[, outcome_diff := `1` - `0`]
     
-    grouped_data <- grouped_data_judges[, outcome_diff := `avg_resid_rank_1` - `avg_resid_rank_0`]
     return(sum(grouped_data$outcome_diff))
 }
 
-## something like this I believe
-conduct_ri(test_function = test_statistic, declaration = declare_ra(N = 74, m = 37), 
-           sharp_hypothesis = 0, data = data_cases)
+grouped_data_cases <- 
+  cases_matched[, .(avg_resid_rank = mean(resid_ranks)),
+       by = .(matches, z)]
+
+## this specifies our randomization procedure
+## within each block, one unit assigned treatment and one unit assigned control
+declaration = declare_ra(blocks = as.vector(grouped_data_cases$matches), 
+                         block_m_each = cbind(rep(1, 37), rep(1, 37)))
+
+conduct_ri(test_function = test_statistic, declaration = declaration, 
+           sharp_hypothesis = 0, data = grouped_data_cases, assignment = "z", sims = 3000)
 
 # * 3.3 Sensitivity analysis ----------------------
 
