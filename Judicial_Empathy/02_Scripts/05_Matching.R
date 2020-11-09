@@ -36,8 +36,8 @@ covars <- c('child', 'woman', 'age', 'republican', 'no_cases',
 covars_and_dummies <- c('child', 'woman', 'age', 'republican', 'no_cases',
                         'agemiss', 'religmiss', 'racemiss', 'circuit',
                         #grep('circuit', colnames(data_judges), value = TRUE),
-                        grep('race', colnames(data_judges), value = TRUE),
-                        grep('religion', colnames(data_judges),value = TRUE))
+                        grep('race.', colnames(data_judges), value = TRUE),
+                        grep('religion.', colnames(data_judges), value = TRUE))
 
 # 2. Get number of treatment and control units ----------
 N_table <- data_judges[, .(Ni = .N), by = z]
@@ -158,7 +158,19 @@ perform_matching(
   match_ratio = 1,
   exact_variables = c('woman'),
   data = data_judges,
-  export = paste0(output, 'match10.csv')
+  export = paste0(output, 'match_10_dummies.csv')
+)
+
+# Match 10.2 Exact matching on woman, using dummies
+perform_matching(
+  match_id = 'm10_RM_covars_dummies_1_e.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0,
+  match_ratio = 1,
+  exact_variables = c('woman'),
+  data = data_judges,
+  export = paste0(output, 'match10_dummy.csv')
 )
 
 

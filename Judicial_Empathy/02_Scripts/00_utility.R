@@ -34,7 +34,8 @@ cast.senm <- function(dat, ms.arg, two.outcomes=FALSE) {
     ms <- as.vector(ms.arg)
 
     #y <- dat$y[!is.na(ms)]
-    y = dat$progressive.vote[!is.na(ms)]
+    #y = dat$progressive.vote[!is.na(ms)]
+    y = dat$avg_resid_rank
     mset <- ms[!is.na(ms)]
     z <- dat$z[!is.na(ms)]
     

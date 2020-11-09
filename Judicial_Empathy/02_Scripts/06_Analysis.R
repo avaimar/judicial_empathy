@@ -19,7 +19,7 @@ library(optmatch)
 library(sensitivitymult)
 library(ggplot2) # Plots
 library(bbplot) # Plots
-library(coin) # wilcoxon signed rank test
+#library(coin) # wilcoxon signed rank test
 library(ri2)
 
 # Output directory
@@ -29,7 +29,7 @@ output <- 'Judicial_empathy/03_Output/04_Analysis/'
 source('Judicial_empathy/02_Scripts/00_utility.R')
 
 # Parameters
-selected_match <- 'Judicial_empathy/03_Output/03_Matching/[INSERT_MATCH_HERE].csv'
+selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10_dummy.csv'
 
 # 1. Load data ------------------------------------
 # Matched judge data
@@ -63,7 +63,7 @@ cat('Gamma = 1 pvalue: ', FRT$pval)
 
 # * 2.2 Sensitivity analysis ----------------------
 
-gammas <- seq(from = 1, to = 5, by = 0.005)
+gammas <- seq(from = 1, to = 2, by = 0.005)
 max_gamma = 1
 for (i in gammas) {
     sen <- senm(y = matches_transformed$y,
@@ -178,7 +178,7 @@ grouped_data_judges <- dcast(grouped_data_judges,
                              value.var = c('woman', 'republican', 'avg_outcome'))
 #grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
 grouped_data_judges <- grouped_data_judges[, outcome_diff := `avg_outcome_1` - `avg_outcome_0`]
-grouped_data_judges <- grouped_data_judges[!is.na(matches)]
+#grouped_data_judges <- grouped_data_judges[!is.na(matches)]
 
 # Merge exact matches
 grouped_data_judges <- merge(grouped_data_judges, exact_matches, by = 'matches', all.x = TRUE)
@@ -201,18 +201,13 @@ wilcox.test(grouped_data_judges[republican_0 == 0 & republican_match ==1]$outcom
             mu=0, paired=FALSE)
 
 # 3. Case data ------------------------------------
-## TODO: add matches to case data
+cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], by = 'songerID')
+cases_matched <- cases_matched[cases_matched$matches != '']
 
 # * 3.1 Obtain residuals --------------------------
 
-## TODO: should we add dummy variables for factors and 
-## add indicator variables for missinh columns? 
-
 ## TODO: "area" is a categorical column.. to use it in regression model
 ## we should convert it to dummy columns
-
-cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], by = 'songerID')
-cases_matched <- cases_matched[cases_matched$matches != '']
 
 model = lm(vote ~ child + woman + republican + circuit + age + 
              race.0 + race.1 + race.2 + race.3 + race.4 + racemiss + 
