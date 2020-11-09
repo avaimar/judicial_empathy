@@ -19,8 +19,9 @@ library(optmatch)
 library(sensitivitymult)
 library(ggplot2) # Plots
 library(bbplot) # Plots
-#library(coin) # wilcoxon signed rank test
+library(coin) # wilcoxon signed rank test
 library(ri2)
+library(survey)
 
 # Output directory
 output <- 'Judicial_empathy/03_Output/04_Analysis/'
@@ -47,7 +48,10 @@ data_cases <- fread('Judicial_Empathy/01_Data/02_Cleaned_data/cases_cleaned.csv'
 
 # 2. Judge data -----------------------------------
 # * 2.1 FRT ---------------------------------------
-matches_transformed <- cast.senm(data_judges_matched, data_judges_matched$matches)
+matches_transformed <- cast.senm(dat = data_judges_matched, 
+                                 ms.arg = data_judges_matched$matches,
+                                 two.outcomes=FALSE,
+                                 y_col = 'progressive.vote')
 
 FRT <- senm(y = matches_transformed$y,
             z = matches_transformed$z, 
@@ -59,7 +63,6 @@ FRT <- senm(y = matches_transformed$y,
             alternative = 'greater')
 
 cat('Gamma = 1 pvalue: ', FRT$pval)
-# hopefully above pval will be smaller than 0.05
 
 # * 2.2 Sensitivity analysis ----------------------
 
@@ -80,11 +83,12 @@ for (i in gammas) {
     }
 }
 cat('Sensitivity gamma: ', max_gamma)
+rm(matches_transformed)
 
 # * 2.3 Stability analysis ----------------------
 
 # We have missing values for: Age, religion, race
-# (Removed birth year as we did not include is as a covarariate)
+# (Removed birth year as we did not include it as a covarariate)
 
 # Obtain mean outcome per match and treatment group, and an indicator
 # of whether any unit has a missing value for age, religion, race
@@ -162,7 +166,8 @@ rm(missing_var_differences, missing_sub, grouped_data_judges, grouped_sub)
 grouped_data_judges <- 
   data_judges_matched[, .(avg_outcome = mean(progressive.vote),
                           woman = sum(woman),
-                          republican = sum(republican)),
+                          republican = sum(republican),
+                          no_cases = sum(no_cases)),
                       by = .(matches, z)]
 
 exact_matches <-
@@ -173,64 +178,96 @@ exact_matches <-
 
 # Reshape so as to calculate differences between matched groups
 grouped_data_judges <- dcast(grouped_data_judges,
-                             #formula = matches + woman + republican ~ z,
                              formula = matches ~ z,
-                             value.var = c('woman', 'republican', 'avg_outcome'))
-#grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
+                             value.var = c('woman', 'republican', 'avg_outcome', 'no_cases'))
 grouped_data_judges <- grouped_data_judges[, outcome_diff := `avg_outcome_1` - `avg_outcome_0`]
-#grouped_data_judges <- grouped_data_judges[!is.na(matches)]
 
 # Merge exact matches
 grouped_data_judges <- merge(grouped_data_judges, exact_matches, by = 'matches', all.x = TRUE)
 
-# Test for women
-#wilcox.test(grouped_data_judges[woman == 0 & woman_match ==1]$outcome_diff,
-#            grouped_data_judges[woman == 1 & woman_match ==1]$outcome_diff, 
-#            mu=0, paired=FALSE)
+# Sum number of cases for the pair
+grouped_data_judges <- grouped_data_judges[, no_cases := no_cases_0 + no_cases_1]
 
-## I think we should use wilcox_test instead of wilcox.test (in package `coin`)
-## for breaking ties
-## but I'm having trouble with the installation (again)
-wilcox.test(grouped_data_judges[woman_0 == 0 & woman_match ==1]$outcome_diff,
-            grouped_data_judges[woman_0 == 1 & woman_match ==1]$outcome_diff, 
-            mu=0, paired=FALSE)
+# * Test for women
+women_data <- 
+  grouped_data_judges[woman_match == 1, .(matches, woman_0, woman_1, outcome_diff, no_cases)]
+wilcox_test(
+  formula = outcome_diff ~ factor(woman_0),
+  data = women_data,
+  conf.int = TRUE,
+  distribution = 'exact',
+  ties.method = 'mid-ranks' # test is insensitive to the tie method
+)
 
-# Test for republican/democrat
-wilcox.test(grouped_data_judges[republican_0 == 0 & republican_match ==1]$outcome_diff,
-            grouped_data_judges[republican_0 == 1 & republican_match ==1]$outcome_diff,
-            mu=0, paired=FALSE)
+# Using number of cases as weights for each pair
+wilcox_test(
+  formula = outcome_diff ~ factor(woman_0),
+  data = women_data,
+  weights = ~ no_cases,
+  distribution = 'exact',
+  ties.method = 'mid-ranks' # test is insensitive to the tie method
+)
+
+# Using survey package
+design <- svydesign(ids = ~0, data = women_data, weights = ~ no_cases)
+svyranktest(
+  formula = outcome_diff ~ factor(woman_0),
+  test = 'wilcoxon',
+  design = design
+)
+
+# * Test for republicans
+republican_data <- 
+  grouped_data_judges[republican_match == 1, 
+                      .(matches, republican_0, republican_1, outcome_diff, no_cases)]
+wilcox_test(
+  formula = outcome_diff ~ factor(republican_0),
+  data = republican_data,
+  conf.int = TRUE,
+  distribution = 'exact',
+  ties.method = 'average-scores' # test is insensitive to the tie method
+)
+
+# Using number of cases as weights for each pair
+wilcox_test(
+  formula = outcome_diff ~ factor(republican_0),
+  data = republican_data,
+  weights = ~ no_cases,
+  distribution = 'exact',
+  ties.method = 'average-scores' # test is insensitive to the tie method
+)
+
+# Using survey package
+design <- svydesign(ids = ~0, data = republican_data, weights = ~ no_cases)
+svyranktest(
+  formula = outcome_diff ~ factor(republican_0),
+  test = 'wilcoxon',
+  design = design
+)
+
+rm(women_data, republican_data, exact_matches)
 
 # 3. Case data ------------------------------------
 cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], by = 'songerID')
 cases_matched <- cases_matched[cases_matched$matches != '']
 
 # * 3.1 Obtain residuals --------------------------
+model <- lm(vote ~ child + woman + republican + factor(circuit) + age + 
+             factor(race) + racemiss + factor(religion) + religmiss +
+             circuitmiss + factor(year) + factor(area), 
+           data=cases_matched)
 
-## TODO: "area" is a categorical column.. to use it in regression model
-## we should convert it to dummy columns
+model <- lm(vote ~ factor(year) + factor(area), 
+            data=cases_matched)
 
-model = lm(vote ~ child + woman + republican + circuit + age + 
-             race.0 + race.1 + race.2 + race.3 + race.4 + racemiss + 
-             religion.0 + religion.1 + religion.2 + religion.3 + religion.4 +
-             religion.5 + religion.7 + religion.8 + religion.9 + religion.10 +
-             religion.99 + religmiss +
-             circuitmiss + circuit.0 + circuit.1 + circuit.2 + circuit.3 + circuit.4 +
-             circuit.5 + circuit.6 + circuit.7 + circuit.8 + circuit.9 + circuit.10 +
-             circuit.11 + circuit.12 +
-             year, data=cases_matched)
-residuals = resid(model)
+residuals <- resid(model)
 
 # * 3.2 FRT ---------------------------------------
-
-ranks = rank(residuals)
+ranks <- rank(residuals)
 cases_matched$resid_ranks <- ranks
 
 ### OUTLINE OF TEST STATISTIC ###
 test_statistic <- function(grouped_data) {
-    # grouped_data <- 
-    # data[, .(avg_resid_rank = mean(resid_ranks)),
-    #                     by = .(matches, z)]
-     
     # Reshape so as to calculate differences between matched groups
     grouped_data <- dcast(grouped_data,
                            formula = matches ~ z,
@@ -249,12 +286,27 @@ test_statistic <- function(grouped_data) {
     #return(sum(grouped_data$weighted_outcome_diff))
 }
 
-grouped_data_cases <- 
-  cases_matched[, .(avg_resid_rank = mean(resid_ranks), n_cases = .N),
-       by = .(matches, z)]
+test_statistic_weighted <- function(grouped_data) {
+  # Reshape so as to calculate differences between matched groups
+  grouped_data <- dcast(grouped_data,
+                        formula = matches ~ z,
+                        value.var = c('weights', 'avg_resid_rank'))
+  
+  grouped_data <- grouped_data[, outcome_diff := `avg_resid_rank_1` - `avg_resid_rank_0`]
+  
+  ## WEIGHTING PROCEDURE:
+  ## Weight by the number of cases in each cluster divided by the total
+  grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
+  
+  return(sum(grouped_data$weighted_outcome_diff))
+}
 
-weights <- grouped_data_cases[, .(weight = n_cases/sum(n_cases))]
-grouped_data_cases$weights = weights
+grouped_data_cases <- 
+  copy(cases_matched[, .(avg_resid_rank = mean(resid_ranks), n_cases = .N),
+       by = .(matches, z)])
+
+grouped_data_cases <- 
+  grouped_data_cases[, weights := n_cases / sum(n_cases)]
 
 ## this specifies our randomization procedure
 ## within each block, one unit assigned treatment and one unit assigned control
@@ -264,13 +316,16 @@ grouped_data_cases$weights = weights
 declaration = declare_ra(blocks = as.vector(grouped_data_cases$matches), 
                          block_m_each = cbind(rep(1, 37), rep(1, 37)))
 
+# Weights of 1
 conduct_ri(test_function = test_statistic, declaration = declaration, 
-           sharp_hypothesis = 0, data = grouped_data_cases, assignment = "z", p='upper', sims = 5000)
+           sharp_hypothesis = 0, data = grouped_data_cases, 
+           assignment = "z", p='upper', sims = 5000)
 
-
-### might this work as well? identical to above test statistic but with weights = 1/2 
-## because lambda = 1/2 by default
-cases_transformed = cast.senm(grouped_data_cases, grouped_data_cases$matches)
+# Identical to above test statistic but with weights = 1/2 because lambda = 1/2 by default
+cases_transformed = cast.senm(dat = grouped_data_cases, 
+                              ms.arg = grouped_data_cases$matches,
+                              two.outcomes=FALSE,
+                              y_col = 'avg_resid_rank')
 
 ### NOTE: senm does not actually compute stratified DIM! it weights all groups equally and 
 ### does not divide by the total number of clusters.
@@ -285,9 +340,107 @@ FRT <- senm(y = cases_transformed$y,
             alternative = 'greater')
 FRT$pval
 
-# * 3.3 Sensitivity analysis ----------------------
+# Weighted by number of cases
+conduct_ri(test_function = test_statistic_weighted, declaration = declaration, 
+           sharp_hypothesis = 0, data = grouped_data_cases, 
+           assignment = "z", p='upper', sims = 5000)
 
-# if we don't get statistically significant result, I don't know 
-# if there's anything to do here
+# * 3.3 Sensitivity analysis -------------------
+gammas <- seq(from = 1, to = 10, by = 0.005)
+max_gamma <- 1
+for (i in gammas) {
+  sen <- senm(y = cases_transformed$y,
+              z = cases_transformed$z, 
+              mset = cases_transformed$mset, 
+              gamma = i,
+              inner = 0,
+              tau = 0,
+              trim=Inf,
+              alternative = 'greater')
+  if (sen$pval > 0.05) {
+    max_gamma <- i
+    break
+  }
+}
+cat('Sensitivity gamma: ', max_gamma)
+rm(cases_transformed)
 
 # * 3.4 Stability analysis ----------------------
+
+# Missing values: Age, religion, race
+
+# Obtain mean outcome per match and treatment group, and an indicator
+# of whether any unit has a missing value for age, religion, race
+
+# HERE --------------------------------------------------------
+grouped_data_cases <- 
+  cases_matched[, .(avg_outcome = mean(vote),
+                    agemiss = ifelse(sum(agemiss) > 0, 1, 0),
+                    religmiss = ifelse(sum(religmiss) > 0, 1, 0),
+                    racemiss = ifelse(sum(racemiss) > 0, 1, 0)),
+                      by = .(matches, z)]
+
+# Reshape so as to calculate differences between matched groups
+grouped_data_cases <- dcast(grouped_data_cases,
+                             formula = matches ~ z,
+                             value.var = c('avg_outcome', 'agemiss', 'religmiss', 'racemiss'))
+grouped_data_cases <- grouped_data_cases[, outcome_diff := avg_outcome_1 - avg_outcome_0]
+
+# Summarize agemiss, religmiss, racemiss
+grouped_data_cases <- grouped_data_cases[, agemiss := ifelse(agemiss_0 + agemiss_1 > 0, 1, 0)]
+grouped_data_cases <- grouped_data_cases[, religmiss := ifelse(religmiss_0 + religmiss_1 > 0, 1, 0)]
+grouped_data_cases <- grouped_data_cases[, racemiss := ifelse(racemiss_0 + racemiss_1 > 0, 1, 0)]
+grouped_data_cases <- grouped_data_cases[, .(matches, outcome_diff, agemiss, religmiss, racemiss)]
+
+# Create box plots of differences in outcomes before and after removing the N/A
+# observations.
+
+missing_var_differences <- data.table()
+for (mis_variable in c('agemiss', 'religmiss', 'racemiss')) {
+  
+  # Create a subset of the data
+  grouped_sub <- copy(grouped_data_cases[, .SD, .SDcols = c(mis_variable, 'outcome_diff')])
+  
+  # Tag and duplicate the data for ggplot
+  grouped_sub <- grouped_sub[, type := 'All observations']
+  eval(parse(text = paste0('missing_sub <- copy(grouped_sub[' ,mis_variable, " == 0])")))
+  missing_sub <- missing_sub[, type := 'Non-missing observations']
+  grouped_sub <- rbind(grouped_sub, missing_sub)
+  
+  # Tag with missing variable type
+  grouped_sub <- grouped_sub[, variable := mis_variable]
+  missing_var_differences <- rbind(missing_var_differences, 
+                                   grouped_sub[, .(variable, type, outcome_diff)])
+}
+
+# Refactor missing variable for visualization purposes
+missing_var_differences <- 
+  missing_var_differences[, variable := factor(variable, 
+                                               levels = c('agemiss', 'religmiss', 'racemiss'),
+                                               labels = c('Age', 'Religion', 'Race'))]
+
+# Obtain observations related to missings for scatter part of plot
+missings_grouped <- copy(grouped_data_cases)
+missings_grouped <- melt(missings_grouped, 
+                         id.vars = c('matches', 'outcome_diff'), 
+                         variable.name = 'mis_variable')
+missings_grouped <- missings_grouped[value == 1]
+
+# Assign type "non-missing observations" so it'll appear in that part of the plot
+missings_grouped <- missings_grouped[, type := 'Non-missing observations']
+
+# Plot
+g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) + 
+  geom_boxplot() +
+  geom_point(data = missings_grouped, aes(x = type, y = outcome_diff),
+             shape = 4) +
+  #bbc_style() + 
+  labs(x = '', y = 'Difference in outcomes') + 
+  theme(axis.text = element_text(size=8),
+        strip.text = element_text(size = 8)) + 
+  facet_wrap(variable ~.) 
+ggsave(filename = paste0(output, '01_stability_analysis_caselevel.png'), scale = 1.4,
+       units = 'in', width = 6, height = 3)
+
+rm(missing_var_differences, missing_sub, grouped_data_cases, grouped_sub)
+

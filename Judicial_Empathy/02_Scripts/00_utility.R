@@ -30,12 +30,14 @@ summarize.match <- function(dat, ms, ps.name="prop", keep.mset=FALSE) {
 
 ## preprocesses the results of pair matching for an analysis
 ## using `senm'.
-cast.senm <- function(dat, ms.arg, two.outcomes=FALSE) {
+cast.senm <- function(dat, ms.arg, two.outcomes=FALSE, y_col) {
     ms <- as.vector(ms.arg)
 
     #y <- dat$y[!is.na(ms)]
     #y = dat$progressive.vote[!is.na(ms)]
-    y = dat$avg_resid_rank
+    #y = dat$avg_resid_rank
+    eval(parse(text = paste0('y = dat$', y_col, '[!is.na(ms)]')))
+    
     mset <- ms[!is.na(ms)]
     z <- dat$z[!is.na(ms)]
     
