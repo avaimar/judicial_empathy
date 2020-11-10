@@ -372,7 +372,6 @@ rm(cases_transformed)
 # Obtain mean outcome per match and treatment group, and an indicator
 # of whether any unit has a missing value for age, religion, race
 
-# HERE --------------------------------------------------------
 grouped_data_cases <- 
   cases_matched[, .(avg_outcome = mean(vote),
                     agemiss = ifelse(sum(agemiss) > 0, 1, 0),

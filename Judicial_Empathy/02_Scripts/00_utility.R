@@ -196,7 +196,7 @@ perform_matching <- function(
       paste0('z ~', paste(variables, collapse =  '+'),
              '+ pscore + strata(gen_match) - 1'))
   
-  png(paste0(output, match_id))
+  png(paste0(output, match_id), width = 400, height = 600)
   plot(xBalance(gen_formula, data = data))
   dev.off()
   
