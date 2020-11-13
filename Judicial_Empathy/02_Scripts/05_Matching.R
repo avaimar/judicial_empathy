@@ -161,6 +161,7 @@ perform_matching(
   export = paste0(output, 'match_10_dummies.csv')
 )
 
+# ----------- MATCH USED IN PROJECT -----------
 # Match 10.2 Exact matching on woman, using dummies
 perform_matching(
   match_id = 'm10_RM_covars_dummies_1_e.png',
@@ -171,6 +172,17 @@ perform_matching(
   exact_variables = c('woman'),
   data = data_judges,
   export = paste0(output, 'match10_dummy.csv')
+)
+
+# Match 10.3 Exact matching on woman, using dummies + fixed ratio 2:1
+perform_matching(
+  match_id = 'm10_RM_covars_dummies_2.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0,
+  match_ratio = 2,
+  exact_variables = c('woman'),
+  data = data_judges
 )
 
 

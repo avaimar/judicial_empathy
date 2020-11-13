@@ -252,12 +252,12 @@ cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], 
 cases_matched <- cases_matched[cases_matched$matches != '']
 
 # * 3.1 Obtain residuals --------------------------
-model <- lm(vote ~ child + woman + republican + factor(circuit) + age + 
+model <- lm(progressive.vote ~ child + woman + republican + factor(circuit) + age + 
              factor(race) + racemiss + factor(religion) + religmiss +
              circuitmiss + factor(year) + factor(area), 
            data=cases_matched)
 
-model <- lm(vote ~ factor(year) + factor(area), 
+model <- lm(progressive.vote ~ factor(year) + factor(area), 
             data=cases_matched)
 
 residuals <- resid(model)
@@ -373,7 +373,7 @@ rm(cases_transformed)
 # of whether any unit has a missing value for age, religion, race
 
 grouped_data_cases <- 
-  cases_matched[, .(avg_outcome = mean(vote),
+  cases_matched[, .(avg_outcome = mean(progressive.vote),
                     agemiss = ifelse(sum(agemiss) > 0, 1, 0),
                     religmiss = ifelse(sum(religmiss) > 0, 1, 0),
                     racemiss = ifelse(sum(racemiss) > 0, 1, 0)),

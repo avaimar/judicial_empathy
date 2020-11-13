@@ -138,6 +138,11 @@ write.csv(judges_small, 'Judicial_empathy/01_data/02_Cleaned_data/judges_cleaned
           row.names = FALSE)
 
 # 4. Case data -----------------------------------
+
+# Save a replication dataset
+write.csv(cases_small, 'Judicial_empathy/01_data/02_Cleaned_data/cases_replication.csv',
+          row.names = FALSE)
+
 # Get unique columns
 cases_small <- cases_small[, .SD, .SDcols = unique(colnames(cases_small))]
 
@@ -318,7 +323,7 @@ covariates[!(covariates %in%c(cov_1_judges, cov_2_case_ID, cov_3_add_judges_appo
 # Keep cov_1_judges, cov_4_case info, treatment and outcome, and V1 as the
 # unique case ID
 cases_small <- cases_small[, .SD, .SDcols = 
-                             c('V1', cov_1_judges, cov_4_case_info, 'z', 'vote')]
+                             c('V1', cov_1_judges, cov_4_case_info, 'z', 'progressive.vote')]
 setnames(cases_small, 'V1', 'case_ID')
 
 # * 4.4. Final changes ---------------------

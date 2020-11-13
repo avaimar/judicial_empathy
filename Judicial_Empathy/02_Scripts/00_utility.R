@@ -196,8 +196,14 @@ perform_matching <- function(
       paste0('z ~', paste(variables, collapse =  '+'),
              '+ pscore + strata(gen_match) - 1'))
   
-  png(paste0(output, match_id), width = 400, height = 600)
-  plot(xBalance(gen_formula, data = data))
+  png(paste0(output, match_id), width = 600, height = 500)
+  par(oma=c(0,0,0,0))
+  par(mar=c(4,2,2,2) + 0.1)
+  plot(xBalance(gen_formula, data = data),
+       cex.lab=1, cex.axis=1, cex.main=1, cex.sub=0.5, 
+       col = c('dark grey', '#d1495b'))
+  legend('topright', legend = c('Unadjusted balance', 'Matched balance'),
+         fill = c('dark grey', '#d1495b'))
   dev.off()
   
   # Export match
