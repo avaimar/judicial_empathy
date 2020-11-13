@@ -30,7 +30,8 @@ output <- 'Judicial_empathy/03_Output/04_Analysis/'
 source('Judicial_empathy/02_Scripts/00_utility.R')
 
 # Parameters
-selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10_dummy.csv'
+#selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10_dummy.csv'
+selected_match <- 'Judicial_empathy/03_Output/03_Matching/match13_dummy.csv'
 
 # 1. Load data ------------------------------------
 # Matched judge data
@@ -54,29 +55,33 @@ matches_transformed <- cast.senm(dat = data_judges_matched,
                                  y_col = 'progressive.vote')
 
 FRT <- senm(y = matches_transformed$y,
-            z = matches_transformed$z, 
+            #z = matches_transformed$z, 
+            z = (1-matches_transformed$z),
             mset = matches_transformed$mset, 
             gamma = 1,
             inner = 0,
             tau = 0,
             trim=Inf,
-            alternative = 'greater')
+            #alternative = 'greater')
+            alternative = 'less')
 
 cat('Gamma = 1 pvalue: ', FRT$pval)
 
 # * 2.2 Sensitivity analysis ----------------------
 
-gammas <- seq(from = 1, to = 2, by = 0.005)
+gammas <- seq(from = 1, to = 2, by = 0.001)
 max_gamma = 1
 for (i in gammas) {
     sen <- senm(y = matches_transformed$y,
-               z = matches_transformed$z, 
+               #z = matches_transformed$z,
+               z = (1-matches_transformed$z),
                mset = matches_transformed$mset, 
                gamma = i,
                inner = 0,
                tau = 0,
                trim=Inf,
-               alternative = 'greater')
+               #alternative = 'greater')
+               alternative = 'less')
     if (sen$pval > 0.05) {
         max_gamma <- i
         break
@@ -85,6 +90,8 @@ for (i in gammas) {
 cat('Sensitivity gamma: ', max_gamma)
 rm(matches_transformed)
 
+# amplify(max_gamma, )
+
 # * 2.3 Stability analysis ----------------------
 
 # We have missing values for: Age, religion, race
@@ -92,6 +99,11 @@ rm(matches_transformed)
 
 # Obtain mean outcome per match and treatment group, and an indicator
 # of whether any unit has a missing value for age, religion, race
+
+## NOTE: for the 2:1 match, no units who have one of race and religion missing
+## but not the other are matched!! This means that the boxplots for the 
+## race and relig stability analyses are the same!!
+
 grouped_data_judges <- 
   data_judges_matched[, .(avg_outcome = mean(progressive.vote),
                           agemiss = ifelse(sum(agemiss) > 0, 1, 0),
@@ -161,19 +173,83 @@ ggsave(filename = paste0(output, '01_stability_analysis.png'), scale = 1.4,
 
 rm(missing_var_differences, missing_sub, grouped_data_judges, grouped_sub)
 
+no_missing_age = data_judges_matched[data_judges_matched$agemiss == 0]
+no_missing_age = no_missing_age %>% group_by(matches) %>% filter(n()>2) %>% ungroup()
+no_missing_age <- cast.senm(dat = no_missing_age, 
+                                 ms.arg = no_missing_age$matches,
+                                 two.outcomes=FALSE,
+                                 y_col = 'progressive.vote')
+FRT <- senm(y = no_missing_age$y,
+            #z = matches_transformed$z, 
+            z = (1-no_missing_age$z),
+            mset = no_missing_age$mset, 
+            gamma = 1,
+            inner = 0,
+            tau = 0,
+            trim=Inf,
+            #alternative = 'greater')
+            alternative = 'less')
+FRT$pval
+
+no_missing_relig = data_judges_matched[data_judges_matched$religmiss == 0]
+no_missing_relig = no_missing_relig %>% group_by(matches) %>% filter(n()>2) %>% ungroup()
+no_missing_relig <- cast.senm(dat = no_missing_relig, 
+                            ms.arg = no_missing_relig$matches,
+                            two.outcomes=FALSE,
+                            y_col = 'progressive.vote')
+FRT <- senm(y = no_missing_relig$y,
+            #z = matches_transformed$z, 
+            z = (1-no_missing_relig$z),
+            mset = no_missing_relig$mset, 
+            gamma = 1,
+            inner = 0,
+            tau = 0,
+            trim=Inf,
+            #alternative = 'greater')
+            alternative = 'less')
+FRT$pval
+
+no_missing_race = data_judges_matched[data_judges_matched$racemiss == 0]
+no_missing_race = no_missing_race %>% group_by(matches) %>% filter(n()>2) %>% ungroup()
+no_missing_race <- cast.senm(dat = no_missing_race, 
+                              ms.arg = no_missing_race$matches,
+                              two.outcomes=FALSE,
+                              y_col = 'progressive.vote')
+FRT <- senm(y = no_missing_race$y,
+            #z = matches_transformed$z, 
+            z = (1-no_missing_race$z),
+            mset = no_missing_race$mset, 
+            gamma = 1,
+            inner = 0,
+            tau = 0,
+            trim=Inf,
+            #alternative = 'greater')
+            alternative = 'less')
+FRT$pval
+
+
 # * 2.4 Heterogeneous effects ---------------------
 # NOTE: THE BELOW CODE WILL ONLY WORK WITH 1:1 MATCHING
+
+## NOTE: not sure if this should become avg(no_cases) for 2:1 matching
 grouped_data_judges <- 
   data_judges_matched[, .(avg_outcome = mean(progressive.vote),
                           woman = sum(woman),
                           republican = sum(republican),
                           no_cases = sum(no_cases)),
                       by = .(matches, z)]
+### ADDED THIS! remove unmatched group ###
+grouped_data_judges = grouped_data_judges[grouped_data_judges$matches != '']
 
+#exact_matches <-
+#  grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 2, 1, 0),
+#                          republican_match = 
+#                           ifelse(sum(republican) == 0 | sum(republican) == 2, 1, 0)), 
+#                      by = matches]
 exact_matches <-
-  grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 2, 1, 0),
+  grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 3, 1, 0),
                           republican_match = 
-                            ifelse(sum(republican) == 0 | sum(republican) == 2, 1, 0)), 
+                            ifelse(sum(republican) == 0 | sum(republican) == 3, 1, 0)), 
                       by = matches]
 
 # Reshape so as to calculate differences between matched groups
@@ -200,13 +276,13 @@ wilcox_test(
 )
 
 # Using number of cases as weights for each pair
-wilcox_test(
-  formula = outcome_diff ~ factor(woman_0),
-  data = women_data,
-  weights = ~ no_cases,
-  distribution = 'exact',
-  ties.method = 'mid-ranks' # test is insensitive to the tie method
-)
+# wilcox_test(
+#   formula = outcome_diff ~ factor(woman_0),
+#   data = women_data,
+#   weights = ~ no_cases,
+#   distribution = 'exact',
+#   ties.method = 'mid-ranks' # test is insensitive to the tie method
+# )
 
 # Using survey package
 design <- svydesign(ids = ~0, data = women_data, weights = ~ no_cases)
@@ -248,6 +324,20 @@ svyranktest(
 rm(women_data, republican_data, exact_matches)
 
 # 3. Case data ------------------------------------
+selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10_dummy.csv'
+
+# load judge data with new match
+data_judges_matched <- fread(selected_match,
+                             colClasses = c('character', rep('numeric', 44), 'factor'))
+
+# Reincorporate outcomes
+data_judges <- fread('Judicial_Empathy/01_Data/02_Cleaned_data/judges_cleaned.csv')
+data_judges_matched <- merge(data_judges_matched,
+                             data_judges[, .(name, progressive.vote)], by = 'name')
+rm(data_judges)
+
+# Cleaned case data
+data_cases <- fread('Judicial_Empathy/01_Data/02_Cleaned_data/cases_cleaned.csv')
 cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], by = 'songerID')
 cases_matched <- cases_matched[cases_matched$matches != '']
 
@@ -346,17 +436,19 @@ conduct_ri(test_function = test_statistic_weighted, declaration = declaration,
            assignment = "z", p='upper', sims = 5000)
 
 # * 3.3 Sensitivity analysis -------------------
-gammas <- seq(from = 1, to = 10, by = 0.005)
+gammas <- seq(from = 1, to = 10, by = 0.001)
 max_gamma <- 1
 for (i in gammas) {
   sen <- senm(y = cases_transformed$y,
               z = cases_transformed$z, 
+              #z = (1-cases_transformed$z),
               mset = cases_transformed$mset, 
               gamma = i,
               inner = 0,
               tau = 0,
               trim=Inf,
               alternative = 'greater')
+              #alternative = 'less')
   if (sen$pval > 0.05) {
     max_gamma <- i
     break

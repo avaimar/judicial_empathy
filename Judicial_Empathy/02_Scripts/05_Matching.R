@@ -219,3 +219,15 @@ perform_matching(
   exact_variables = c('woman'),
   data = data_judges
 )
+
+
+perform_matching(
+  match_id = 'm13_RM_dummies.png',
+  dmatrix = 'MD',
+  variables = covars_and_dummies,
+  caliper = 0.3,
+  match_ratio = 2,
+  exact_variables = c('woman'),
+  data = data_judges,
+  export = paste0(output, 'match13_dummy.csv')
+)
