@@ -280,6 +280,8 @@ wilcox_test(
   ties.method = 'mid-ranks' # test is insensitive to the tie method
 )
 
+
+
 # Using number of cases as weights for each pair
 # wilcox_test(
 #   formula = outcome_diff ~ factor(woman_0),
