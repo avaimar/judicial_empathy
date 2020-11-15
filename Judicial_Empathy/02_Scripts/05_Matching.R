@@ -161,7 +161,7 @@ perform_matching(
   export = paste0(output, 'match_10_dummies.csv')
 )
 
-# ----------- MATCH USED IN PROJECT -----------
+# ----------- MATCH USED IN PROJECT (CASE LEVEL) -----------
 # Match 10.2 Exact matching on woman, using dummies
 perform_matching(
   match_id = 'm10_RM_covars_dummies_1_e.png',
@@ -220,7 +220,7 @@ perform_matching(
   data = data_judges
 )
 
-
+# ----------- MATCH USED IN PROJECT (JUDGE LEVEL) -----------
 perform_matching(
   match_id = 'm13_RM_dummies.png',
   dmatrix = 'MD',

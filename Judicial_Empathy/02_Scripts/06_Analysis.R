@@ -21,7 +21,8 @@ library(ggplot2) # Plots
 library(bbplot) # Plots
 library(coin) # wilcoxon signed rank test
 library(ri2)
-library(survey)
+library(survey) # for weighted HTE
+library(tidyverse)
 
 # Output directory
 output <- 'Judicial_empathy/03_Output/04_Analysis/'
@@ -90,7 +91,7 @@ for (i in gammas) {
 cat('Sensitivity gamma: ', max_gamma)
 rm(matches_transformed)
 
-# amplify(max_gamma, )
+amplify(max_gamma, c(2,3,4,5,6,7))
 
 # * 2.3 Stability analysis ----------------------
 
@@ -113,12 +114,12 @@ grouped_data_judges <-
 
 # Reshape so as to calculate differences between matched groups
 grouped_data_judges <- dcast(grouped_data_judges,
-                             formula = matches + agemiss + religmiss + racemiss ~ z,
-                             value.var = 'avg_outcome')
-grouped_data_judges <- grouped_data_judges[, outcome_diff := `1` - `0`]
+                             formula = matches  ~ z,
+                             value.var = c('avg_outcome', 'agemiss', 'religmiss','racemiss'))
+grouped_data_judges <- grouped_data_judges[, outcome_diff := avg_outcome_1 - avg_outcome_0]
 
 # Drop units that were not matched
-grouped_data_judges <- grouped_data_judges[!is.na(outcome_diff)]
+grouped_data_judges <- grouped_data_judges[matches != '']
 
 # Create box plots of differences in outcomes before and after removing the N/A
 # observations.
@@ -127,11 +128,13 @@ missing_var_differences <- data.table()
 for (mis_variable in c('agemiss', 'religmiss', 'racemiss')) {
   
   # Create a subset of the data
-  grouped_sub <- copy(grouped_data_judges[, .SD, .SDcols = c(mis_variable, 'outcome_diff')])
+  grouped_sub <- copy(grouped_data_judges[, .SD, .SDcols = c(
+    paste0(mis_variable, '_0'), paste0(mis_variable, '_1'), 'outcome_diff')])
   
   # Tag and duplicate the data for ggplot
   grouped_sub <- grouped_sub[, type := 'All observations']
-  eval(parse(text = paste0('missing_sub <- copy(grouped_sub[' ,mis_variable, " == 0])")))
+  eval(parse(text = paste0('missing_sub <- copy(grouped_sub[' , 
+                           mis_variable, "_0 == 0 & ", mis_variable, "_1 == 0])")))
   missing_sub <- missing_sub[, type := 'Non-missing observations']
   grouped_sub <- rbind(grouped_sub, missing_sub)
   
@@ -148,6 +151,11 @@ missing_var_differences <-
                                                labels = c('Age', 'Religion', 'Race'))]
 
 # Obtain observations related to missings for scatter part of plot
+grouped_data_judges <- grouped_data_judges[, agemiss := ifelse(agemiss_0 == 1 | agemiss_1 == 1, 1, 0)]
+grouped_data_judges <- grouped_data_judges[, religmiss := ifelse(religmiss_0 == 1 | religmiss_1 == 1, 1, 0)]
+grouped_data_judges <- grouped_data_judges[, racemiss := ifelse(racemiss_0 == 1 | racemiss_1 == 1, 1, 0)]
+
+
 missings_grouped <- 
   copy(grouped_data_judges[, .(matches, agemiss, religmiss, racemiss, outcome_diff)])
 missings_grouped <- melt(missings_grouped, 
@@ -157,6 +165,10 @@ missings_grouped <- missings_grouped[value == 1]
 
 # Assign type "non-missing observations" so it'll appear in that part of the plot
 missings_grouped <- missings_grouped[, type := 'Non-missing observations']
+
+missings_grouped <- missings_grouped[, variable := factor(mis_variable, 
+                                                          levels = c('agemiss', 'religmiss', 'racemiss'),
+                                                          labels = c('Age', 'Religion', 'Race'))]
 
 # Plot
 g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) + 
@@ -173,6 +185,7 @@ ggsave(filename = paste0(output, '01_stability_analysis.png'), scale = 1.4,
 
 rm(missing_var_differences, missing_sub, grouped_data_judges, grouped_sub)
 
+# Check FRT robustness to missing values of each variable (age, relig, race)
 no_missing_age = data_judges_matched[data_judges_matched$agemiss == 0]
 no_missing_age = no_missing_age %>% group_by(matches) %>% filter(n()>2) %>% ungroup()
 no_missing_age <- cast.senm(dat = no_missing_age, 
@@ -226,26 +239,18 @@ FRT <- senm(y = no_missing_race$y,
             #alternative = 'greater')
             alternative = 'less')
 FRT$pval
-
+rm(no_missing_age, no_missing_race, no_missing_relig)
 
 # * 2.4 Heterogeneous effects ---------------------
-# NOTE: THE BELOW CODE WILL ONLY WORK WITH 1:1 MATCHING
-
-## NOTE: not sure if this should become avg(no_cases) for 2:1 matching
+# NOTE: BELOW CODE IS ONLY FOR 2:1 MATCHING
 grouped_data_judges <- 
   data_judges_matched[, .(avg_outcome = mean(progressive.vote),
                           woman = sum(woman),
                           republican = sum(republican),
-                          no_cases = sum(no_cases)),
+                          no_cases = mean(no_cases)),
                       by = .(matches, z)]
-### ADDED THIS! remove unmatched group ###
 grouped_data_judges = grouped_data_judges[grouped_data_judges$matches != '']
 
-#exact_matches <-
-#  grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 2, 1, 0),
-#                          republican_match = 
-#                           ifelse(sum(republican) == 0 | sum(republican) == 2, 1, 0)), 
-#                      by = matches]
 exact_matches <-
   grouped_data_judges[, .(woman_match = ifelse(sum(woman) == 0 | sum(woman) == 3, 1, 0),
                           republican_match = 
@@ -261,8 +266,8 @@ grouped_data_judges <- grouped_data_judges[, outcome_diff := `avg_outcome_1` - `
 # Merge exact matches
 grouped_data_judges <- merge(grouped_data_judges, exact_matches, by = 'matches', all.x = TRUE)
 
-# Sum number of cases for the pair
-grouped_data_judges <- grouped_data_judges[, no_cases := no_cases_0 + no_cases_1]
+# Get mean number of cases for the pair
+grouped_data_judges <- grouped_data_judges[, no_cases := (no_cases_0 + no_cases_1) / 2]
 
 # * Test for women
 women_data <- 
@@ -321,7 +326,7 @@ svyranktest(
   design = design
 )
 
-rm(women_data, republican_data, exact_matches)
+rm(women_data, republican_data, exact_matches, grouped_data_judges)
 
 # 3. Case data ------------------------------------
 selected_match <- 'Judicial_empathy/03_Output/03_Matching/match10_dummy.csv'
@@ -342,11 +347,6 @@ cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], 
 cases_matched <- cases_matched[cases_matched$matches != '']
 
 # * 3.1 Obtain residuals --------------------------
-model <- lm(progressive.vote ~ child + woman + republican + factor(circuit) + age + 
-             factor(race) + racemiss + factor(religion) + religmiss +
-             circuitmiss + factor(year) + factor(area), 
-           data=cases_matched)
-
 model <- lm(progressive.vote ~ factor(year) + factor(area), 
             data=cases_matched)
 
@@ -367,13 +367,9 @@ test_statistic <- function(grouped_data) {
     
     ## WEIGHTING PROCEDURE:
     ## can set weights equal to 1 (so that each cluster is equally weighted)
-    ## or weight by the number of cases in each cluster divided by the total
     grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
     
     return(sum(grouped_data$outcome_diff))
-    # return(sum(grouped_data$outcome_diff)/2) # <- this is the test stat used by senm function!
-    # gives the same results
-    #return(sum(grouped_data$weighted_outcome_diff))
 }
 
 test_statistic_weighted <- function(grouped_data) {
@@ -457,6 +453,8 @@ for (i in gammas) {
 cat('Sensitivity gamma: ', max_gamma)
 rm(cases_transformed)
 
+amplify(max_gamma, c(2,3,4,5))
+
 # * 3.4 Stability analysis ----------------------
 
 # Missing values: Age, religion, race
@@ -519,6 +517,9 @@ missings_grouped <- missings_grouped[value == 1]
 
 # Assign type "non-missing observations" so it'll appear in that part of the plot
 missings_grouped <- missings_grouped[, type := 'Non-missing observations']
+missings_grouped <- missings_grouped[, variable := factor(mis_variable, 
+                                                          levels = c('agemiss', 'religmiss', 'racemiss'),
+                                                          labels = c('Age', 'Religion', 'Race'))]
 
 # Plot
 g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) + 
