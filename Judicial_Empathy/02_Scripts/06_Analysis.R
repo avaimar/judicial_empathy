@@ -21,11 +21,7 @@ library(ggplot2) # Plots
 library(bbplot) # Plots
 library(coin) # wilcoxon signed rank test
 library(ri2)
-<<<<<<< HEAD
-library(survey)
-=======
 library(survey) # for weighted HTE
->>>>>>> 9a5784630dcc0494241695a37139d5df05705374
 library(tidyverse)
 
 # Output directory
