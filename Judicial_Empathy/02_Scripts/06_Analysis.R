@@ -22,6 +22,7 @@ library(bbplot) # Plots
 library(coin) # wilcoxon signed rank test
 library(ri2)
 library(survey)
+library(tidyverse)
 
 # Output directory
 output <- 'Judicial_empathy/03_Output/04_Analysis/'
@@ -71,6 +72,8 @@ cat('Gamma = 1 pvalue: ', FRT$pval)
 
 gammas <- seq(from = 1, to = 2, by = 0.001)
 max_gamma = 1
+pvals = c()
+over_pval = FALSE
 for (i in gammas) {
     sen <- senm(y = matches_transformed$y,
                #z = matches_transformed$z,
@@ -82,12 +85,16 @@ for (i in gammas) {
                trim=Inf,
                #alternative = 'greater')
                alternative = 'less')
-    if (sen$pval > 0.05) {
+    pvals = append(pvals, sen$pval)
+    if (sen$pval > 0.05 & over_pval == FALSE) {
         max_gamma <- i
-        break
+        over_pval = TRUE
+        #break
     }
 }
 cat('Sensitivity gamma: ', max_gamma)
+plot(gammas, pvals, type='l')
+
 rm(matches_transformed)
 
 # amplify(max_gamma, )
@@ -342,13 +349,11 @@ cases_matched <- merge(data_cases, data_judges_matched[, .(songerID, matches)], 
 cases_matched <- cases_matched[cases_matched$matches != '']
 
 # * 3.1 Obtain residuals --------------------------
-model <- lm(progressive.vote ~ child + woman + republican + factor(circuit) + age + 
-             factor(race) + racemiss + factor(religion) + religmiss +
-             circuitmiss + factor(year) + factor(area), 
-           data=cases_matched)
 
-model <- lm(progressive.vote ~ factor(year) + factor(area), 
-            data=cases_matched)
+#model <- lm(progressive.vote ~ factor(year) + factor(area), 
+#           data=cases_matched)
+model <- glm(progressive.vote ~ factor(year) + factor(area), 
+            data=cases_matched, family='binomial')
 
 residuals <- resid(model)
 
@@ -368,7 +373,7 @@ test_statistic <- function(grouped_data) {
     ## WEIGHTING PROCEDURE:
     ## can set weights equal to 1 (so that each cluster is equally weighted)
     ## or weight by the number of cases in each cluster divided by the total
-    grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
+    #grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
     
     return(sum(grouped_data$outcome_diff))
     # return(sum(grouped_data$outcome_diff)/2) # <- this is the test stat used by senm function!
@@ -387,6 +392,8 @@ test_statistic_weighted <- function(grouped_data) {
   ## WEIGHTING PROCEDURE:
   ## Weight by the number of cases in each cluster divided by the total
   grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0+weights_1)]
+  # grouped_data <- grouped_data[, weighted_outcome_diff := (outcome_diff)*(weights_0*weights_1)]
+  # ^ this choice of weights minimizes the variance
   
   return(sum(grouped_data$weighted_outcome_diff))
 }
@@ -409,7 +416,7 @@ declaration = declare_ra(blocks = as.vector(grouped_data_cases$matches),
 # Weights of 1
 conduct_ri(test_function = test_statistic, declaration = declaration, 
            sharp_hypothesis = 0, data = grouped_data_cases, 
-           assignment = "z", p='upper', sims = 5000)
+           assignment = "z", p="upper", sims = 5000)
 
 # Identical to above test statistic but with weights = 1/2 because lambda = 1/2 by default
 cases_transformed = cast.senm(dat = grouped_data_cases, 
@@ -433,105 +440,30 @@ FRT$pval
 # Weighted by number of cases
 conduct_ri(test_function = test_statistic_weighted, declaration = declaration, 
            sharp_hypothesis = 0, data = grouped_data_cases, 
-           assignment = "z", p='upper', sims = 5000)
+           assignment = "z", p='upper', sims = 10000)
 
 # * 3.3 Sensitivity analysis -------------------
-gammas <- seq(from = 1, to = 10, by = 0.001)
+gammas <- seq(from = 1, to = 2, by = 0.001)
+pvals = c()
 max_gamma <- 1
+over_pval = FALSE
 for (i in gammas) {
   sen <- senm(y = cases_transformed$y,
               z = cases_transformed$z, 
-              #z = (1-cases_transformed$z),
               mset = cases_transformed$mset, 
               gamma = i,
               inner = 0,
               tau = 0,
               trim=Inf,
               alternative = 'greater')
-              #alternative = 'less')
-  if (sen$pval > 0.05) {
+  pvals = append(pvals, sen$pval)
+  if (sen$pval > 0.05 & over_pval==FALSE) {
     max_gamma <- i
-    break
+    over_pval=TRUE
+    #break
   }
 }
+plot(gammas, pvals, type='l')
+
 cat('Sensitivity gamma: ', max_gamma)
 rm(cases_transformed)
-
-# * 3.4 Stability analysis ----------------------
-
-# Missing values: Age, religion, race
-
-# Obtain mean outcome per match and treatment group, and an indicator
-# of whether any unit has a missing value for age, religion, race
-
-grouped_data_cases <- 
-  cases_matched[, .(avg_outcome = mean(progressive.vote),
-                    agemiss = ifelse(sum(agemiss) > 0, 1, 0),
-                    religmiss = ifelse(sum(religmiss) > 0, 1, 0),
-                    racemiss = ifelse(sum(racemiss) > 0, 1, 0)),
-                      by = .(matches, z)]
-
-# Reshape so as to calculate differences between matched groups
-grouped_data_cases <- dcast(grouped_data_cases,
-                             formula = matches ~ z,
-                             value.var = c('avg_outcome', 'agemiss', 'religmiss', 'racemiss'))
-grouped_data_cases <- grouped_data_cases[, outcome_diff := avg_outcome_1 - avg_outcome_0]
-
-# Summarize agemiss, religmiss, racemiss
-grouped_data_cases <- grouped_data_cases[, agemiss := ifelse(agemiss_0 + agemiss_1 > 0, 1, 0)]
-grouped_data_cases <- grouped_data_cases[, religmiss := ifelse(religmiss_0 + religmiss_1 > 0, 1, 0)]
-grouped_data_cases <- grouped_data_cases[, racemiss := ifelse(racemiss_0 + racemiss_1 > 0, 1, 0)]
-grouped_data_cases <- grouped_data_cases[, .(matches, outcome_diff, agemiss, religmiss, racemiss)]
-
-# Create box plots of differences in outcomes before and after removing the N/A
-# observations.
-
-missing_var_differences <- data.table()
-for (mis_variable in c('agemiss', 'religmiss', 'racemiss')) {
-  
-  # Create a subset of the data
-  grouped_sub <- copy(grouped_data_cases[, .SD, .SDcols = c(mis_variable, 'outcome_diff')])
-  
-  # Tag and duplicate the data for ggplot
-  grouped_sub <- grouped_sub[, type := 'All observations']
-  eval(parse(text = paste0('missing_sub <- copy(grouped_sub[' ,mis_variable, " == 0])")))
-  missing_sub <- missing_sub[, type := 'Non-missing observations']
-  grouped_sub <- rbind(grouped_sub, missing_sub)
-  
-  # Tag with missing variable type
-  grouped_sub <- grouped_sub[, variable := mis_variable]
-  missing_var_differences <- rbind(missing_var_differences, 
-                                   grouped_sub[, .(variable, type, outcome_diff)])
-}
-
-# Refactor missing variable for visualization purposes
-missing_var_differences <- 
-  missing_var_differences[, variable := factor(variable, 
-                                               levels = c('agemiss', 'religmiss', 'racemiss'),
-                                               labels = c('Age', 'Religion', 'Race'))]
-
-# Obtain observations related to missings for scatter part of plot
-missings_grouped <- copy(grouped_data_cases)
-missings_grouped <- melt(missings_grouped, 
-                         id.vars = c('matches', 'outcome_diff'), 
-                         variable.name = 'mis_variable')
-missings_grouped <- missings_grouped[value == 1]
-
-# Assign type "non-missing observations" so it'll appear in that part of the plot
-missings_grouped <- missings_grouped[, type := 'Non-missing observations']
-
-# Plot
-g <- ggplot(missing_var_differences, aes(y = outcome_diff, x = type)) + 
-  geom_boxplot() +
-  geom_point(data = missings_grouped, aes(x = type, y = outcome_diff),
-             shape = 4) +
-  #bbc_style() + 
-  labs(x = '', y = 'Difference in outcomes') + 
-  theme(axis.text = element_text(size=8),
-        strip.text = element_text(size = 8)) + 
-  facet_wrap(variable ~.) 
-ggsave(filename = paste0(output, '01_stability_analysis_caselevel.png'), scale = 1.4,
-       units = 'in', width = 6, height = 3)
-
-rm(missing_var_differences, missing_sub, grouped_data_cases, grouped_sub)
-
